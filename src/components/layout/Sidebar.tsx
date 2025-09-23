@@ -14,7 +14,11 @@ import {
   Target,
   Settings,
   Shield,
-  Trash2
+  Trash2,
+  Home,
+  Building2,
+  UserCheck,
+  Building
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NavLink } from 'react-router-dom'; // Added for NavLink
@@ -57,6 +61,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'team', label: 'Team', icon: Users },
     { id: 'reports', label: 'Reports', icon: BarChart2 },
     { id: 'projects', label: 'Projects', icon: Folder },
+    { id: 'rental-property', label: 'Rental Property', icon: Home },
+    { id: 'resale-property', label: 'Resale Property', icon: Building2 },
+    { id: 'clients', label: 'Clients', icon: UserCheck },
+    { id: 'owners', label: 'Owners', icon: Building },
     { id: 'project-manager-management', label: 'PM Management', icon: Users },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'admin-management', label: 'Admin Management', icon: Shield },

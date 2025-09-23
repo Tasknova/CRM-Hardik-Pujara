@@ -38,6 +38,10 @@ import { MemberDailyTaskStats } from './MemberDailyTaskStats';
 import { DailyTaskQuickStats } from './DailyTaskQuickStats';
 import { TaskQuickStats } from './TaskQuickStats';
 import { WebhookSettings } from './WebhookSettings';
+import RentalPropertyPage from './RentalPropertyPage';
+import ResalePropertyPage from './ResalePropertyPage';
+import ClientsPage from './ClientsPage';
+import OwnersPage from './OwnersPage';
 
 interface AdminDashboardProps {
   activeTab: string;
@@ -2983,6 +2987,22 @@ const handleDeleteHoliday = async (holidayId: string) => {
 
   if (activeTab === 'deleted-tasks') {
     return <DeletedTasksPage onBack={() => onTabChange('tasks')} />;
+  }
+
+  if (activeTab === 'rental-property') {
+    return <RentalPropertyPage onBack={() => onTabChange('dashboard')} />;
+  }
+
+  if (activeTab === 'resale-property') {
+    return <ResalePropertyPage onBack={() => onTabChange('dashboard')} />;
+  }
+
+  if (activeTab === 'clients') {
+    return <ClientsPage />;
+  }
+
+  if (activeTab === 'owners') {
+    return <OwnersPage />;
   }
 
   return null;

@@ -1,0 +1,356 @@
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Plus, Eye, Calendar, MapPin, User, DollarSign, Search, Trash2 } from 'lucide-react';
+import Button from '../ui/Button';
+import Card from '../ui/Card';
+import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import RentalDealTimeline from './RentalDealTimeline';
+
+interface RentalDealsListProps {
+  dealType: 'residential' | 'commercial';
+  onBack: () => void;
+  onCreateNew: () => void;
+}
+
+interface RentalDeal {
+  id: string;
+  project_name: string;
+  client_name: string;
+  property_address: string;
+  rental_amount: number;
+  status: string;
+  current_stage: number;
+  created_at: string;
+  start_date: string | null;
+}
+
+const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onCreateNew }) => {
+  const [deals, setDeals] = useState<RentalDeal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [dealToDelete, setDealToDelete] = useState<RentalDeal | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    fetchDeals();
+  }, [dealType]);
+
+  const fetchDeals = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('rental_deals')
+        .select('id, project_name, client_name, property_address, rental_amount, status, current_stage, created_at, start_date')
+        .eq('deal_type', dealType)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDeals(data || []);
+    } catch (error) {
+      console.error('Error fetching deals:', error);
+      toast.error('Failed to load deals');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewDeal = (dealId: string) => {
+    setSelectedDealId(dealId);
+  };
+
+  const handleBackFromTimeline = () => {
+    setSelectedDealId(null);
+    fetchDeals(); // Refresh deals list
+  };
+
+  const handleDeleteDeal = async () => {
+    if (!dealToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      // Get stage IDs first
+      const { data: stageData } = await supabase
+        .from('rental_deal_stages')
+        .select('id')
+        .eq('deal_id', dealToDelete.id);
+
+      const stageIds = (stageData || []).map(s => s.id);
+
+      // Delete related stage assignments first (if table exists)
+      if (stageIds.length > 0) {
+        try {
+          await supabase
+            .from('rental_stage_assignments')
+            .delete()
+            .in('stage_id', stageIds);
+        } catch (error) {
+          console.warn('Stage assignments table may not exist:', error);
+        }
+      }
+
+      // Delete stages
+      const { error: stagesError } = await supabase
+        .from('rental_deal_stages')
+        .delete()
+        .eq('deal_id', dealToDelete.id);
+
+      if (stagesError) {
+        console.warn('Error deleting stages:', stagesError);
+      }
+
+      // Delete team member assignments
+      const { error: teamError } = await supabase
+        .from('rental_deal_team_members')
+        .delete()
+        .eq('deal_id', dealToDelete.id);
+
+      if (teamError) {
+        console.warn('Error deleting team assignments:', teamError);
+      }
+
+      // Finally delete the deal
+      const { error: dealError } = await supabase
+        .from('rental_deals')
+        .delete()
+        .eq('id', dealToDelete.id);
+
+      if (dealError) throw dealError;
+
+      toast.success(`${dealToDelete.project_name} deleted successfully`);
+      setDealToDelete(null);
+      fetchDeals(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting deal:', error);
+      toast.error('Failed to delete deal');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const filteredDeals = deals.filter(deal =>
+    deal.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    deal.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    deal.property_address.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'cancelled':
+        return 'bg-red-100 text-red-800 border-red-200';
+      default:
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+    }
+  };
+
+  if (selectedDealId) {
+    return (
+      <RentalDealTimeline
+        dealId={selectedDealId}
+        dealType={dealType}
+        onBack={handleBackFromTimeline}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading deals...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
+      <div className="p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="secondary"
+              onClick={onBack}
+              className="flex items-center space-x-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 capitalize">
+                {dealType} Rental Deals
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Manage your {dealType} rental property deals
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={onCreateNew}
+            className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create New Deal</span>
+          </Button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search deals..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        {/* Deals Grid */}
+        {filteredDeals.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <Calendar className="w-12 h-12 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              No {dealType} deals found
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {searchTerm ? 'No deals match your search criteria.' : 'Get started by creating your first deal.'}
+            </p>
+            <Button
+              onClick={onCreateNew}
+              className="flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create First Deal</span>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredDeals.map((deal) => (
+              <Card key={deal.id} className="p-6 hover:shadow-lg transition-all duration-300">
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate">
+                        {deal.project_name}
+                      </h3>
+                      <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(deal.status)} mt-1`}>
+                        {deal.status.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center space-x-2">
+                      <User className="w-4 h-4" />
+                      <span className="truncate">{deal.client_name}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-4 h-4" />
+                      <span className="truncate">{deal.property_address}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="w-4 h-4" />
+                      <span>₹{deal.rental_amount.toLocaleString()}/month</span>
+                    </div>
+                    {deal.start_date && (
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="w-4 h-4" />
+                        <span>{format(new Date(deal.start_date), 'MMM dd, yyyy')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Progress */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Progress</span>
+                      <span className="text-gray-900">Stage {deal.current_stage}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${(deal.current_stage / 7) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end space-x-2 pt-2">
+                    <button
+                      onClick={() => handleViewDeal(deal.id)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors duration-200"
+                      title="View Timeline"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDealToDelete(deal)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors duration-200"
+                      title="Delete Deal"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Summary Stats */}
+        {filteredDeals.length > 0 && (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-2xl font-bold text-blue-600">{filteredDeals.length}</div>
+              <div className="text-sm text-gray-600">Total Deals</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-2xl font-bold text-green-600">
+                {filteredDeals.filter(d => d.status === 'active').length}
+              </div>
+              <div className="text-sm text-gray-600">Active</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-2xl font-bold text-purple-600">
+                {filteredDeals.filter(d => d.status === 'completed').length}
+              </div>
+              <div className="text-sm text-gray-600">Completed</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-2xl font-bold text-orange-600">
+                ₹{filteredDeals.reduce((sum, deal) => sum + deal.rental_amount, 0).toLocaleString()}
+              </div>
+              <div className="text-sm text-gray-600">Total Monthly Rent</div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        <DeleteConfirmationModal
+          isOpen={!!dealToDelete}
+          onClose={() => setDealToDelete(null)}
+          onConfirm={handleDeleteDeal}
+          taskName={dealToDelete?.project_name || ""}
+          taskDescription={dealToDelete ? `${dealToDelete.deal_type} rental deal for ${dealToDelete.client_name}` : ""}
+          projectName={dealToDelete?.project_name}
+          isLoading={isDeleting}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default RentalDealsList;
