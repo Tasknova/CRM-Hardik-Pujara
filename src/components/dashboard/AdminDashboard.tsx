@@ -44,6 +44,7 @@ import BuilderPropertyPage from './BuilderPropertyPage';
 import ClientsPage from './ClientsPage';
 import OwnersPage from './OwnersPage';
 import BuildersPage from './BuildersPage';
+import LoanProvidersPage from './LoanProvidersPage';
 
 interface AdminDashboardProps {
   activeTab: string;
@@ -3013,6 +3014,9 @@ const handleDeleteHoliday = async (holidayId: string) => {
 
   if (activeTab === 'builders') {
     return <BuildersPage />;
+  }
+  if (activeTab === 'loan-providers') {
+    return <LoanProvidersPage />;
   }
 
   return null;

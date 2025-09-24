@@ -19,7 +19,8 @@ import {
   Building2,
   UserCheck,
   Building,
-  Factory
+  Factory,
+  CreditCard
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NavLink } from 'react-router-dom'; // Added for NavLink
@@ -67,8 +68,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'builder-property', label: 'Builder Purchase', icon: Factory },
     { id: 'clients', label: 'Clients', icon: UserCheck },
     { id: 'owners', label: 'Owners', icon: Building },
-    { id: 'builders', label: 'Builders', icon: Factory },
-    { id: 'project-manager-management', label: 'PM Management', icon: Users },
+  { id: 'builders', label: 'Builders', icon: Factory },
+  { id: 'loan-providers', label: 'Loan Providers', icon: CreditCard },
+  { id: 'project-manager-management', label: 'PM Management', icon: Users },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'admin-management', label: 'Admin Management', icon: Shield },
   ];

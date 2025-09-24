@@ -37,15 +37,22 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (value) {
+    if (value && options) {
       const filtered = options.filter(option =>
-        option.name.toLowerCase().includes(value.toLowerCase())
+        option && option.name && option.name.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredOptions(filtered);
     } else {
-      setFilteredOptions(options);
+      setFilteredOptions(options || []);
     }
   }, [value, options]);
+
+  // Ensure the input value is properly synchronized
+  useEffect(() => {
+    if (inputRef.current && inputRef.current.value !== value) {
+      inputRef.current.value = value || '';
+    }
+  }, [value]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -70,13 +77,8 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
     onChange(newValue);
     setIsOpen(true);
     
-    // If the value doesn't match any existing option, clear selection
-    const exactMatch = options.find(option => 
-      option.name.toLowerCase() === newValue.toLowerCase()
-    );
-    if (!exactMatch) {
-      onSelect(null);
-    }
+    // Don't clear selection when typing - let the user type freely
+    // The onSelect will be called when they actually select an option
   };
 
   const handleOptionSelect = (option: AutocompleteOption) => {
@@ -93,11 +95,11 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
     }
   };
 
-  const exactMatch = options.find(option => 
-    option.name.toLowerCase() === value.toLowerCase()
+  const exactMatch = options && options.find(option => 
+    option && option.name && value && option.name.toLowerCase() === value.toLowerCase()
   );
 
-  const showCreateOption = value.trim() && !exactMatch && filteredOptions.length === 0;
+  const showCreateOption = value && value.trim() && !exactMatch && filteredOptions.length === 0;
 
   return (
     <div className="relative">
@@ -115,9 +117,21 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
           ref={inputRef}
           type="text"
           required={required}
-          value={value}
+          value={value || ''}
           onChange={handleInputChange}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            setIsOpen(true);
+            // Ensure the input is properly focused and can be typed in
+            if (inputRef.current) {
+              inputRef.current.focus();
+            }
+          }}
+          onClick={() => {
+            setIsOpen(true);
+            if (inputRef.current) {
+              inputRef.current.focus();
+            }
+          }}
           className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
           placeholder={placeholder}
           autoComplete="off"

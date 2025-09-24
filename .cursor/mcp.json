@@ -8,10 +8,10 @@
           "npx",
           "-y",
           "@supabase/mcp-server-supabase@latest",
-          "--project-ref=mmadclhbsuvkcbibxcsp"
+          "--project-ref=vlgwzlqakteridiyprjr"
         ],
         "env": {
-          "SUPABASE_ACCESS_TOKEN": "sbp_e6f98ea6dc0aea5fe800a3aab18b37e472fd2989"
+          "SUPABASE_ACCESS_TOKEN": "sbp_cf9979d6b18287979e34ad52ee8134487d711af6"
         }
       }
     }

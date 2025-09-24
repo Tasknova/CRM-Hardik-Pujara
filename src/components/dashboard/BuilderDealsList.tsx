@@ -57,6 +57,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      console.log('Fetched deals from database:', data);
       setDeals(data || []);
     } catch (error) {
       console.error('Error fetching builder deals:', error);
@@ -171,8 +172,24 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
 
   const totalDeals = deals.length;
   const activeDeals = deals.filter(d => d.status === 'active').length;
-  const totalValue = deals.reduce((sum, deal) => sum + (parseFloat(deal.property_price?.toString() || '0') || 0), 0);
-  const totalCommission = deals.reduce((sum, deal) => sum + (parseFloat(deal.commission_amount?.toString() || '0') || 0), 0);
+  
+  // Debug logging
+  console.log('Deals data:', deals);
+  console.log('Property prices:', deals.map(d => d.property_price));
+  
+  const totalValue = deals.reduce((sum, deal) => {
+    const price = parseFloat(deal.property_price?.toString() || '0') || 0;
+    console.log(`Deal ${deal.project_name}: property_price="${deal.property_price}", parsed=${price}`);
+    return sum + price;
+  }, 0);
+  
+  const totalCommission = deals.reduce((sum, deal) => {
+    const commission = parseFloat(deal.commission_amount?.toString() || '0') || 0;
+    console.log(`Deal ${deal.project_name}: commission_amount="${deal.commission_amount}", parsed=${commission}`);
+    return sum + commission;
+  }, 0);
+  
+  console.log('Total Value:', totalValue, 'Total Commission:', totalCommission);
 
   return (
     <div className="space-y-6">
@@ -220,6 +237,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
               <p className="text-2xl font-bold text-gray-900">
                 ₹{(totalValue / 100000).toFixed(1)}L
               </p>
+              <p className="text-xs text-gray-500">Raw: {totalValue}</p>
             </div>
           </div>
         </Card>

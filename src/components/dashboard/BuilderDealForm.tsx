@@ -29,6 +29,14 @@ interface TeamMember {
   department?: string;
 }
 
+interface LoanProvider {
+  id: string;
+  provider_name: string;
+  address?: string;
+  contact_details?: any;
+  employees?: any[];
+}
+
 interface DealFormData {
   project_name: string;
   deal_type: 'residential' | 'commercial';
@@ -53,7 +61,11 @@ interface DealFormData {
   commission_percentage: string;
   commission_amount: string;
   booking_amount: string;
+  has_loan: boolean;
   loan_amount: string;
+  loan_provider_id: string;
+  loan_provider_name: string;
+  loan_provider_contact: string;
   
   // Timeline
   start_date: string;
@@ -89,7 +101,11 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     commission_percentage: '',
     commission_amount: '',
     booking_amount: '',
+    has_loan: false,
     loan_amount: '',
+    loan_provider_id: '',
+    loan_provider_name: '',
+    loan_provider_contact: '',
     start_date: '',
     end_date: '',
     selected_members: [],
@@ -99,12 +115,14 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loanProviders, setLoanProviders] = useState<LoanProvider[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchBuilders();
     fetchClients();
     fetchTeamMembers();
+    fetchLoanProviders();
   }, []);
 
   const fetchBuilders = async () => {
@@ -151,6 +169,21 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     } catch (error) {
       console.error('Error fetching team members:', error);
       toast.error('Failed to fetch team members');
+    }
+  };
+
+  const fetchLoanProviders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('loan_providers')
+        .select('*')
+        .order('provider_name');
+
+      if (error) throw error;
+      console.log('Loan providers fetched:', data);
+      setLoanProviders(data || []);
+    } catch (error) {
+      console.error('Error fetching loan providers:', error);
     }
   };
 
@@ -247,6 +280,58 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     }
   };
 
+  const handleLoanProviderSelect = async (provider: LoanProvider | null) => {
+    if (!provider) {
+      setFormData(prev => ({ 
+        ...prev, 
+        loan_provider_id: '',
+        loan_provider_name: '',
+        loan_provider_contact: ''
+      }));
+      return;
+    }
+
+    if (provider.id === 'new') {
+      try {
+        const { data, error } = await supabase
+          .from('loan_providers')
+          .insert([{
+            provider_name: provider.provider_name,
+            address: '',
+            contact_details: { phone: '', email: '', website: '' },
+            employees: []
+          }])
+          .select().single();
+
+        if (error) throw error;
+
+        setFormData(prev => ({ 
+          ...prev, 
+          loan_provider_id: data.id,
+          loan_provider_name: data.provider_name,
+          loan_provider_contact: ''
+        }));
+        fetchLoanProviders();
+        toast.success('New loan provider created successfully');
+      } catch (error) {
+        console.error('Error creating loan provider:', error);
+        toast.error('Failed to create new loan provider');
+      }
+    } else {
+      console.log('Setting loan provider data:', {
+        id: provider.id,
+        name: provider.provider_name,
+        contact: provider.contact_details?.phone || ''
+      });
+      setFormData(prev => ({ 
+        ...prev, 
+        loan_provider_id: provider.id,
+        loan_provider_name: provider.provider_name,
+        loan_provider_contact: provider.contact_details?.phone || ''
+      }));
+    }
+  };
+
   const handleMemberToggle = (memberId: string) => {
     setFormData(prev => ({
       ...prev,
@@ -312,7 +397,11 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
           commission_percentage: parseFloat(formData.commission_percentage) || null,
           commission_amount: parseFloat(formData.commission_amount) || null,
           booking_amount: parseFloat(formData.booking_amount) || null,
+          has_loan: formData.has_loan,
           loan_amount: parseFloat(formData.loan_amount) || null,
+          loan_provider_id: formData.loan_provider_id || null,
+          loan_provider_name: formData.loan_provider_name,
+          loan_provider_contact: formData.loan_provider_contact,
           start_date: formData.start_date,
           end_date: formData.end_date,
           status: 'active',
@@ -476,7 +565,17 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
                   <input
                     type="number"
                     value={formData.property_price}
-                    onChange={(e) => setFormData(prev => ({ ...prev, property_price: e.target.value }))}
+                    onChange={(e) => {
+                      const propertyPrice = e.target.value;
+                      const percentage = parseFloat(formData.commission_percentage) || 0;
+                      const commissionAmount = (parseFloat(propertyPrice) * percentage) / 100;
+                      
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        property_price: propertyPrice,
+                        commission_amount: commissionAmount.toFixed(2)
+                      }));
+                    }}
                     className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter price in lakhs"
                   />
@@ -596,21 +695,41 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
                   type="number"
                   step="0.01"
                   value={formData.commission_percentage}
-                  onChange={(e) => setFormData(prev => ({ ...prev, commission_percentage: e.target.value }))}
+                  onChange={(e) => {
+                    const percentage = e.target.value;
+                    const propertyPrice = parseFloat(formData.property_price) || 0;
+                    const commissionAmount = (propertyPrice * parseFloat(percentage)) / 100;
+                    
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      commission_percentage: percentage,
+                      commission_amount: commissionAmount.toFixed(2)
+                    }));
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Commission Amount
+                  Commission Amount (in Lakhs)
                 </label>
-                <input
-                  type="number"
-                  value={formData.commission_amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, commission_amount: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={formData.commission_amount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, commission_amount: e.target.value }))}
+                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Auto-calculated from percentage"
+                    readOnly
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <span className="text-gray-500 text-sm">L</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Auto-calculated: {formData.commission_percentage}% of ₹{formData.property_price}L = ₹{formData.commission_amount}L
+                </p>
               </div>
             </div>
 
@@ -627,17 +746,101 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
                 />
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Loan Amount
+              {/* Loan Question */}
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Does this deal involve a loan?
                 </label>
-                <input
-                  type="number"
-                  value={formData.loan_amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, loan_amount: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="has_loan"
+                      checked={formData.has_loan === true}
+                      onChange={() => setFormData(prev => ({ ...prev, has_loan: true }))}
+                      className="mr-2"
+                    />
+                    Yes
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="has_loan"
+                      checked={formData.has_loan === false}
+                      onChange={() => setFormData(prev => ({ ...prev, has_loan: false, loan_amount: '', loan_provider_id: '', loan_provider_name: '', loan_provider_contact: '' }))}
+                      className="mr-2"
+                    />
+                    No
+                  </label>
+                </div>
               </div>
+
+              {formData.has_loan && (
+                <>
+                  {/* Debug info - remove this later */}
+                  <div className="col-span-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800 font-medium">Debug Info:</p>
+                    <p className="text-xs text-yellow-600 mt-1">
+                      Loan providers loaded: {loanProviders.length} | 
+                      Current value: "{formData.loan_provider_name}" | 
+                      Provider ID: {formData.loan_provider_id}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Loan Provider *
+                    </label>
+                    <AutocompleteInput
+                      key={`loan-provider-${loanProviders.length}`}
+                      label=""
+                      placeholder="Select or search loan provider"
+                      value={formData.loan_provider_name}
+                      onChange={(value) => {
+                        console.log('Loan provider name changed:', value);
+                        setFormData(prev => ({ 
+                          ...prev, 
+                          loan_provider_name: value,
+                          // Clear ID and contact when typing manually
+                          loan_provider_id: '',
+                          loan_provider_contact: ''
+                        }));
+                      }}
+                      onSelect={(option) => {
+                        console.log('Loan provider selected:', option);
+                        handleLoanProviderSelect(option as LoanProvider | null);
+                      }}
+                      options={(() => {
+                        const mappedOptions = loanProviders.map(provider => ({
+                          id: provider.id || '',
+                          name: provider.provider_name || ''
+                        })).filter(option => option.name.trim() !== '');
+                        console.log('Loan provider options:', mappedOptions);
+                        return mappedOptions;
+                      })()}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Loan Amount (in Lakhs)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={formData.loan_amount}
+                        onChange={(e) => setFormData(prev => ({ ...prev, loan_amount: e.target.value }))}
+                        className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Enter loan amount in lakhs"
+                      />
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <span className="text-gray-500 text-sm">L</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
