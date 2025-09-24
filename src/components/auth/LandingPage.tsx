@@ -22,16 +22,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectRole }) => {
         <div className="text-center mb-20">
           <div className="flex justify-center mb-8">
             <div className="bg-white p-6 rounded-full shadow-2xl border-4 border-blue-100 transform hover:scale-110 transition-transform duration-300">
-              <img 
-                src="/logo2.png" 
-                alt="Tasknova Logo" 
-                className="h-20 w-auto"
-              />
+              <div className="flex items-center space-x-3">
+                <div className="text-4xl">🏢</div>
+                <h1 className="text-3xl font-bold text-gray-800">Propazone</h1>
+              </div>
             </div>
           </div>
 
           <p className="text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed font-light">
-            Streamline your team's task management and leave tracking with our comprehensive, intelligent solution
+            Streamline your real estate agency's deal management, team coordination, and client relationships with our comprehensive CRM solution
           </p>
           <div className="mt-8 flex justify-center">
             <div className="bg-gradient-to-r from-blue-500 to-teal-500 h-1 w-24 rounded-full"></div>

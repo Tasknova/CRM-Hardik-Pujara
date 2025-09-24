@@ -1,11 +1,12 @@
-# Tasknova - Team Task & Leave Management
+# Propazone - Real Estate CRM & Deal Management
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Tasknova/TeamManagement?utm_source=oss&utm_medium=github&utm_campaign=Tasknova%2FTeamManagement&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
-
-A comprehensive team management application built with React, TypeScript, and Supabase. Tasknova provides powerful tools for task management, leave tracking, and team collaboration with role-based access control.
+A comprehensive real estate agency management application built with React, TypeScript, and Supabase. Propazone provides powerful tools for deal management, client relationships, team coordination, and property transactions with role-based access control.
 
 ## Features
 
+- **Deal Management**: Track rental deals and builder purchase deals with comprehensive timelines
+- **Client & Owner Management**: Maintain detailed client and property owner databases
+- **Builder Management**: Manage builder relationships and property portfolios
 - **Task Management**: Create, assign, and track tasks with priorities and deadlines
 - **Leave Management**: Request and approve leaves with calendar integration
 - **Role-Based Access**: Support for Admins, Project Managers, and Team Members
@@ -37,4 +38,4 @@ A comprehensive team management application built with React, TypeScript, and Su
 
 ---
 
-© 2024 Tasknova. All rights reserved.
+© 2024 Propazone. All rights reserved.

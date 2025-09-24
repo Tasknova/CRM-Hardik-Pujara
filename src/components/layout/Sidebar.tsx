@@ -106,17 +106,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
              {/* Logo Section */}
        <div className="flex items-center justify-center h-16 px-4 border-b border-blue-200">
          {isOpen ? (
-           <img 
-             src="/logo2.png" 
-             alt="Tasknova" 
-             className="h-8 w-auto"
-           />
+           <div className="flex items-center space-x-2">
+             <div className="text-2xl">🏢</div>
+             <h1 className="text-xl font-bold text-gray-800">Propazone</h1>
+           </div>
          ) : (
-           <img 
-             src="/logo.png" 
-             alt="Tasknova" 
-             className="h-8 w-auto"
-           />
+           <div className="text-2xl">🏢</div>
          )}
        </div>
 

@@ -73,7 +73,7 @@ const Header: React.FC<HeaderProps> = ({ unreadNotifications, onNotificationsCli
             <div className="flex-shrink-0 flex items-center">
               <div className="block">
                 <h1 className="text-xl font-bold text-gray-900">{getPageTitle()}</h1>
-                <p className="text-xs text-gray-500">Tasknova Team Management</p>
+                <p className="text-xs text-gray-500">Propazone Real Estate CRM</p>
               </div>
             </div>
           </div>

@@ -440,7 +440,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
                 "title": "SuperBot 🚀",
                 "titleAvatarSrc": "https://mmadclhbsuvkcbibxcsp.supabase.co/storage/v1/object/public/avatars//357f28f4-9993-4f63-b609-c31f60111133_1752589383843.png",
                 "avatarSize": 30,
-                "welcomeMessage": " Hey there! I'm Superbot, your AI assistant from Tasknova.",
+                "welcomeMessage": " Hey there! I'm Superbot, your AI assistant from Propazone.",
                 "errorMessage": "Please connect me to n8n first",
                 "backgroundColor": "#010c27",
                 "height": 600,
