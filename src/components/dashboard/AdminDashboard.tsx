@@ -40,8 +40,10 @@ import { TaskQuickStats } from './TaskQuickStats';
 import { WebhookSettings } from './WebhookSettings';
 import RentalPropertyPage from './RentalPropertyPage';
 import ResalePropertyPage from './ResalePropertyPage';
+import BuilderPropertyPage from './BuilderPropertyPage';
 import ClientsPage from './ClientsPage';
 import OwnersPage from './OwnersPage';
+import BuildersPage from './BuildersPage';
 
 interface AdminDashboardProps {
   activeTab: string;
@@ -2997,12 +2999,20 @@ const handleDeleteHoliday = async (holidayId: string) => {
     return <ResalePropertyPage onBack={() => onTabChange('dashboard')} />;
   }
 
+  if (activeTab === 'builder-property') {
+    return <BuilderPropertyPage onBack={() => onTabChange('dashboard')} />;
+  }
+
   if (activeTab === 'clients') {
     return <ClientsPage />;
   }
 
   if (activeTab === 'owners') {
     return <OwnersPage />;
+  }
+
+  if (activeTab === 'builders') {
+    return <BuildersPage />;
   }
 
   return null;

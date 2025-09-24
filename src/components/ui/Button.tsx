@@ -49,4 +49,5 @@ const Button: React.FC<ButtonProps> = ({
   );
 };
 
+// Export the Button component
 export default Button;
