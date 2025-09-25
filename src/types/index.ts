@@ -38,6 +38,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  client_id?: string;
   client_name?: string;
   start_date?: string;
   expected_end_date?: string;

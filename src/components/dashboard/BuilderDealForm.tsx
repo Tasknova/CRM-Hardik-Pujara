@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import AutocompleteInput from '../ui/AutocompleteInput';
+import NewClientModal from '../ui/NewClientModal';
+import NewBuilderModal from '../ui/NewBuilderModal';
+import NewLoanProviderModal from '../ui/NewLoanProviderModal';
 import { toast } from 'sonner';
 
 interface Builder {
@@ -80,9 +83,10 @@ interface BuilderDealFormProps {
   dealType: 'residential' | 'commercial';
   onBack: () => void;
   onSuccess: () => void;
+  editDealId?: string; // Optional deal ID for editing
 }
 
-const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onSuccess }) => {
+const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onSuccess, editDealId }) => {
   const [formData, setFormData] = useState<DealFormData>({
     project_name: '',
     deal_type: dealType,
@@ -117,6 +121,12 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loanProviders, setLoanProviders] = useState<LoanProvider[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showNewClientModal, setShowNewClientModal] = useState(false);
+  const [showNewBuilderModal, setShowNewBuilderModal] = useState(false);
+  const [showNewLoanProviderModal, setShowNewLoanProviderModal] = useState(false);
+  const [pendingClientName, setPendingClientName] = useState('');
+  const [pendingBuilderName, setPendingBuilderName] = useState('');
+  const [pendingLoanProviderName, setPendingLoanProviderName] = useState('');
 
   useEffect(() => {
     fetchBuilders();
@@ -124,6 +134,13 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     fetchTeamMembers();
     fetchLoanProviders();
   }, []);
+
+  // Load deal data for editing
+  useEffect(() => {
+    if (editDealId) {
+      loadDealForEdit();
+    }
+  }, [editDealId]);
 
   const fetchBuilders = async () => {
     try {
@@ -187,6 +204,57 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     }
   };
 
+  const loadDealForEdit = async () => {
+    if (!editDealId) return;
+    
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('builder_deals')
+        .select('*')
+        .eq('id', editDealId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setFormData({
+          project_name: data.project_name || '',
+          deal_type: data.deal_type || dealType,
+          property_type: data.property_type || '',
+          property_address: data.property_address || '',
+          property_area: data.property_area || '',
+          property_price: data.property_price || '',
+          builder_id: data.builder_id,
+          builder_name: data.builder_name || '',
+          builder_location: data.builder_location || '',
+          client_id: data.client_id,
+          client_name: data.client_name || '',
+          client_email: data.client_email || '',
+          client_phone: data.client_phone || '',
+          client_address: data.client_address || '',
+          commission_percentage: data.commission_percentage || '',
+          commission_amount: data.commission_amount || '',
+          booking_amount: data.booking_amount || '',
+          has_loan: data.has_loan || false,
+          loan_amount: data.loan_amount || '',
+          loan_provider_id: data.loan_provider_id || '',
+          loan_provider_name: data.loan_provider_name || '',
+          loan_provider_contact: data.loan_provider_contact || '',
+          start_date: data.start_date || '',
+          end_date: data.end_date || '',
+          selected_members: data.selected_members || [],
+          priority: data.priority || 'medium'
+        });
+      }
+    } catch (error) {
+      console.error('Error loading deal for edit:', error);
+      toast.error('Failed to load deal data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleBuilderSelect = async (builder: Builder | null) => {
     if (!builder) {
       setFormData(prev => ({ 
@@ -199,33 +267,9 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     }
 
     if (builder.id === 'new') {
-      try {
-        const { data, error } = await supabase
-          .from('builders')
-          .insert([{
-            name: builder.name,
-            location: formData.builder_location || 'Not specified',
-            contact_email: null,
-            contact_phone: null,
-            address: null,
-            employees: []
-          }])
-          .select().single();
-
-        if (error) throw error;
-
-        setFormData(prev => ({ 
-          ...prev, 
-          builder_id: data.id,
-          builder_name: data.name,
-          builder_location: data.location
-        }));
-        fetchBuilders();
-        toast.success('New builder created successfully');
-      } catch (error) {
-        console.error('Error creating builder:', error);
-        toast.error('Failed to create new builder');
-      }
+      // Show modal to create new builder
+      setPendingBuilderName(builder.name);
+      setShowNewBuilderModal(true);
     } else {
       setFormData(prev => ({
         ...prev,
@@ -249,26 +293,9 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     }
 
     if (client.id === 'new') {
-      try {
-        const { data, error } = await supabase
-          .from('clients')
-          .insert([{
-            name: client.name,
-            email: formData.client_email || null,
-            phone: formData.client_phone || null,
-            address: formData.client_address || null
-          }])
-          .select().single();
-
-        if (error) throw error;
-
-        setFormData(prev => ({ ...prev, client_id: data.id }));
-        fetchClients();
-        toast.success('New client created successfully');
-      } catch (error) {
-        console.error('Error creating client:', error);
-        toast.error('Failed to create new client');
-      }
+      // Show modal to create new client
+      setPendingClientName(client.name);
+      setShowNewClientModal(true);
     } else {
       setFormData(prev => ({
         ...prev,
@@ -278,6 +305,43 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
         client_address: client.address || ''
       }));
     }
+  };
+
+  const handleNewClientSuccess = (client: { id: string; name: string; email?: string; phone?: string; address?: string }) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      client_id: client.id,
+      client_email: client.email || '',
+      client_phone: client.phone || '',
+      client_address: client.address || ''
+    }));
+    fetchClients(); // Refresh the clients list
+    setShowNewClientModal(false);
+    setPendingClientName('');
+  };
+
+  const handleNewBuilderSuccess = (builder: { id: string; name: string; location: string; email?: string; phone?: string; address?: string }) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      builder_id: builder.id,
+      builder_name: builder.name,
+      builder_location: builder.location
+    }));
+    fetchBuilders(); // Refresh the builders list
+    setShowNewBuilderModal(false);
+    setPendingBuilderName('');
+  };
+
+  const handleNewLoanProviderSuccess = (loanProvider: { id: string; name: string; email?: string; phone?: string; address?: string }) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      loan_provider_id: loanProvider.id,
+      loan_provider_name: loanProvider.name,
+      loan_provider_contact: loanProvider.phone || ''
+    }));
+    fetchLoanProviders(); // Refresh the loan providers list
+    setShowNewLoanProviderModal(false);
+    setPendingLoanProviderName('');
   };
 
   const handleLoanProviderSelect = async (provider: LoanProvider | null) => {
@@ -292,31 +356,9 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     }
 
     if (provider.id === 'new') {
-      try {
-        const { data, error } = await supabase
-          .from('loan_providers')
-          .insert([{
-            provider_name: provider.provider_name,
-            address: '',
-            contact_details: { phone: '', email: '', website: '' },
-            employees: []
-          }])
-          .select().single();
-
-        if (error) throw error;
-
-        setFormData(prev => ({ 
-          ...prev, 
-          loan_provider_id: data.id,
-          loan_provider_name: data.provider_name,
-          loan_provider_contact: ''
-        }));
-        fetchLoanProviders();
-        toast.success('New loan provider created successfully');
-      } catch (error) {
-        console.error('Error creating loan provider:', error);
-        toast.error('Failed to create new loan provider');
-      }
+      // Show modal to create new loan provider
+      setPendingLoanProviderName(provider.provider_name);
+      setShowNewLoanProviderModal(true);
     } else {
       console.log('Setting loan provider data:', {
         id: provider.id,
@@ -361,114 +403,208 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
 
     setLoading(true);
     try {
-      // First create a project entry
-      const { data: projectData, error: projectError } = await supabase
-        .from('projects')
-        .insert([{
-          name: formData.project_name,
-          description: `${dealType} builder purchase deal - ${formData.property_type}`,
-          status: 'active',
-          start_date: formData.start_date,
-          expected_end_date: formData.end_date
-        }])
-        .select().single();
+      let projectData: any;
+      let dealData: any;
 
-      if (projectError) throw projectError;
+      if (editDealId) {
+        // Update existing deal
+        const { data: existingDeal, error: fetchError } = await supabase
+          .from('builder_deals')
+          .select('project_id')
+          .eq('id', editDealId)
+          .single();
 
-      // Create builder deal entry
-      const { data: dealData, error: dealError } = await supabase
-        .from('builder_deals')
-        .insert([{
-          project_id: projectData.id,
-          project_name: formData.project_name,
-          deal_type: formData.deal_type,
-          property_type: formData.property_type,
-          property_address: formData.property_address,
-          property_area: parseFloat(formData.property_area) || null,
-          property_price: parseFloat(formData.property_price) || null,
-          builder_id: formData.builder_id,
-          builder_name: formData.builder_name,
-          builder_location: formData.builder_location,
-          client_id: formData.client_id,
-          client_name: formData.client_name,
-          client_email: formData.client_email,
-          client_phone: formData.client_phone,
-          client_address: formData.client_address,
-          commission_percentage: parseFloat(formData.commission_percentage) || null,
-          commission_amount: parseFloat(formData.commission_amount) || null,
-          booking_amount: parseFloat(formData.booking_amount) || null,
-          has_loan: formData.has_loan,
-          loan_amount: parseFloat(formData.loan_amount) || null,
-          loan_provider_id: formData.loan_provider_id || null,
-          loan_provider_name: formData.loan_provider_name,
-          loan_provider_contact: formData.loan_provider_contact,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
-          status: 'active',
-          priority: formData.priority,
-          created_by: formData.selected_members[0]
-        }])
-        .select().single();
+        if (fetchError) throw fetchError;
 
-      if (dealError) throw dealError;
+        // Update the project
+        const { data: updatedProject, error: projectError } = await supabase
+          .from('projects')
+          .update({
+            name: formData.project_name,
+            description: `${dealType} builder purchase deal - ${formData.property_type}`,
+            status: 'active',
+            start_date: formData.start_date,
+            expected_end_date: formData.end_date
+          })
+          .eq('id', existingDeal.project_id)
+          .select()
+          .single();
 
-      // Create team member assignments
-      const teamAssignments = formData.selected_members.map(memberId => ({
-        deal_id: dealData.id,
-        member_id: memberId,
-        role: teamMembers.find(m => m.id === memberId)?.role || 'member',
-        assigned_by: formData.selected_members[0]
-      }));
+        if (projectError) throw projectError;
+        projectData = updatedProject;
 
-      const { error: teamError } = await supabase
-        .from('builder_deal_team_members')
-        .insert(teamAssignments);
+        // Update the builder deal
+        const { data: updatedDeal, error: dealError } = await supabase
+          .from('builder_deals')
+          .update({
+            project_name: formData.project_name,
+            deal_type: formData.deal_type,
+            property_type: formData.property_type,
+            property_address: formData.property_address,
+            property_area: parseFloat(formData.property_area) || null,
+            property_price: parseFloat(formData.property_price) || null,
+            builder_id: formData.builder_id,
+            builder_name: formData.builder_name,
+            builder_location: formData.builder_location,
+            client_id: formData.client_id,
+            client_name: formData.client_name,
+            client_email: formData.client_email,
+            client_phone: formData.client_phone,
+            client_address: formData.client_address,
+            commission_percentage: parseFloat(formData.commission_percentage) || null,
+            commission_amount: parseFloat(formData.commission_amount) || null,
+            booking_amount: parseFloat(formData.booking_amount) || null,
+            has_loan: formData.has_loan,
+            loan_amount: parseFloat(formData.loan_amount) || null,
+            loan_provider_id: formData.loan_provider_id || null,
+            loan_provider_name: formData.loan_provider_name,
+            loan_provider_contact: formData.loan_provider_contact,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            status: 'active',
+            priority: formData.priority
+          })
+          .eq('id', editDealId)
+          .select()
+          .single();
 
-      if (teamError) throw teamError;
+        if (dealError) throw dealError;
+        dealData = updatedDeal;
 
-      // Create default stages based on deal type
-      const stages = dealType === 'residential' 
-        ? [
-            'Booking formalities',
-            'Brokerage confirmation Signing',
-            'Buyer Loan Sanction priocess',
-            'Legal Check',
-            'Agreement to sale',
-            'TDS and Bank Loan formalities',
-            'Loan Disbursement',
-            'Brokerage Invoicing',
-            'Documents upload and future reminders'
-          ]
-        : [
-            'Booking formalities',
-            'Brokerage confirmation Signing', 
-            'Buyer Loan Sanction priocess',
-            'Legal Check',
-            'Agreement to sale',
-            'TDS and Bank Loan formalities',
-            'Loan Disbursement',
-            'Brokerage Invoicing',
-            'Documents upload and future reminders'
-          ];
+        // Update team member assignments
+        await supabase
+          .from('builder_deal_team_members')
+          .delete()
+          .eq('deal_id', editDealId);
 
-      const stageEntries = stages.map((stageName, index) => ({
-        deal_id: dealData.id,
-        stage_name: stageName,
-        stage_order: index + 1,
-        status: 'pending'
-      }));
+        const teamAssignments = formData.selected_members.map(memberId => ({
+          deal_id: editDealId,
+          member_id: memberId,
+          role: teamMembers.find(m => m.id === memberId)?.role || 'member',
+          assigned_by: formData.selected_members[0]
+        }));
 
-      const { error: stagesError } = await supabase
-        .from('builder_deal_stages')
-        .insert(stageEntries);
+        const { error: teamError } = await supabase
+          .from('builder_deal_team_members')
+          .insert(teamAssignments);
 
-      if (stagesError) throw stagesError;
+        if (teamError) throw teamError;
 
-      toast.success('Builder deal created successfully!');
-      onSuccess();
+        toast.success('Builder deal updated successfully!');
+        onSuccess();
+      } else {
+        // Create new deal
+        // First create a project entry
+        const { data: newProjectData, error: projectError } = await supabase
+          .from('projects')
+          .insert([{
+            name: formData.project_name,
+            description: `${dealType} builder purchase deal - ${formData.property_type}`,
+            status: 'active',
+            start_date: formData.start_date,
+            expected_end_date: formData.end_date
+          }])
+          .select().single();
+
+        if (projectError) throw projectError;
+        projectData = newProjectData;
+
+        // Create builder deal entry
+        const { data: newDealData, error: dealError } = await supabase
+          .from('builder_deals')
+          .insert([{
+            project_id: projectData.id,
+            project_name: formData.project_name,
+            deal_type: formData.deal_type,
+            property_type: formData.property_type,
+            property_address: formData.property_address,
+            property_area: parseFloat(formData.property_area) || null,
+            property_price: parseFloat(formData.property_price) || null,
+            builder_id: formData.builder_id,
+            builder_name: formData.builder_name,
+            builder_location: formData.builder_location,
+            client_id: formData.client_id,
+            client_name: formData.client_name,
+            client_email: formData.client_email,
+            client_phone: formData.client_phone,
+            client_address: formData.client_address,
+            commission_percentage: parseFloat(formData.commission_percentage) || null,
+            commission_amount: parseFloat(formData.commission_amount) || null,
+            booking_amount: parseFloat(formData.booking_amount) || null,
+            has_loan: formData.has_loan,
+            loan_amount: parseFloat(formData.loan_amount) || null,
+            loan_provider_id: formData.loan_provider_id || null,
+            loan_provider_name: formData.loan_provider_name,
+            loan_provider_contact: formData.loan_provider_contact,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            status: 'active',
+            priority: formData.priority,
+            created_by: formData.selected_members[0]
+          }])
+          .select().single();
+
+        if (dealError) throw dealError;
+        dealData = newDealData;
+
+        // Create team member assignments for new deal
+        const teamAssignments = formData.selected_members.map(memberId => ({
+          deal_id: dealData.id,
+          member_id: memberId,
+          role: teamMembers.find(m => m.id === memberId)?.role || 'member',
+          assigned_by: formData.selected_members[0]
+        }));
+
+        const { error: teamError } = await supabase
+          .from('builder_deal_team_members')
+          .insert(teamAssignments);
+
+        if (teamError) throw teamError;
+
+        // Create default stages based on deal type
+        const stages = dealType === 'residential' 
+          ? [
+              'Booking formalities',
+              'Brokerage confirmation Signing',
+              'Buyer Loan Sanction priocess',
+              'Legal Check',
+              'Agreement to sale',
+              'TDS and Bank Loan formalities',
+              'Loan Disbursement',
+              'Brokerage Invoicing',
+              'Documents upload and future reminders'
+            ]
+          : [
+              'Booking formalities',
+              'Brokerage confirmation Signing', 
+              'Buyer Loan Sanction priocess',
+              'Legal Check',
+              'Agreement to sale',
+              'TDS and Bank Loan formalities',
+              'Loan Disbursement',
+              'Brokerage Invoicing',
+              'Documents upload and future reminders'
+            ];
+
+        const stageEntries = stages.map((stageName, index) => ({
+          deal_id: dealData.id,
+          stage_name: stageName,
+          stage_order: index + 1,
+          status: 'pending'
+        }));
+
+        const { error: stagesError } = await supabase
+          .from('builder_deal_stages')
+          .insert(stageEntries);
+
+        if (stagesError) throw stagesError;
+
+        toast.success('Builder deal created successfully!');
+        onSuccess();
+      }
     } catch (error) {
-      console.error('Error creating builder deal:', error);
-      toast.error('Failed to create builder deal');
+      console.error('Error saving builder deal:', error);
+      toast.error(`Failed to ${editDealId ? 'update' : 'create'} builder deal`);
     } finally {
       setLoading(false);
     }
@@ -486,7 +622,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
           Back
         </Button>
         <h1 className="text-2xl font-bold text-gray-900">
-          New {dealType === 'residential' ? 'Residential' : 'Commercial'} Builder Purchase Deal
+          {editDealId ? 'Edit' : 'New'} {dealType === 'residential' ? 'Residential' : 'Commercial'} Builder Purchase Deal
         </h1>
       </div>
 
@@ -777,17 +913,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
 
               {formData.has_loan && (
                 <>
-                  {/* Debug info - remove this later */}
-                  <div className="col-span-2 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800 font-medium">Debug Info:</p>
-                    <p className="text-xs text-yellow-600 mt-1">
-                      Loan providers loaded: {loanProviders.length} | 
-                      Current value: "{formData.loan_provider_name}" | 
-                      Provider ID: {formData.loan_provider_id}
-                    </p>
-                  </div>
-                  
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Loan Provider *
                     </label>
@@ -951,11 +1077,44 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Builder Deal'}
+              {loading ? (editDealId ? 'Updating...' : 'Creating...') : (editDealId ? 'Update Builder Deal' : 'Create Builder Deal')}
             </Button>
           </div>
         </form>
       </Card>
+
+      {/* New Client Modal */}
+      <NewClientModal
+        isOpen={showNewClientModal}
+        onClose={() => {
+          setShowNewClientModal(false);
+          setPendingClientName('');
+        }}
+        onSuccess={handleNewClientSuccess}
+        initialName={pendingClientName}
+      />
+
+      {/* New Builder Modal */}
+      <NewBuilderModal
+        isOpen={showNewBuilderModal}
+        onClose={() => {
+          setShowNewBuilderModal(false);
+          setPendingBuilderName('');
+        }}
+        onSuccess={handleNewBuilderSuccess}
+        initialName={pendingBuilderName}
+      />
+
+      {/* New Loan Provider Modal */}
+      <NewLoanProviderModal
+        isOpen={showNewLoanProviderModal}
+        onClose={() => {
+          setShowNewLoanProviderModal(false);
+          setPendingLoanProviderName('');
+        }}
+        onSuccess={handleNewLoanProviderSuccess}
+        initialName={pendingLoanProviderName}
+      />
     </div>
   );
 };

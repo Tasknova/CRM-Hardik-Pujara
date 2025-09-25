@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Users, Calendar, MapPin, DollarSign, FileText, User, Home } from 'lucide-react';
+import { ArrowLeft, Save, Users, Calendar, DollarSign, FileText, User, Home } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import RentalDealTimeline from './RentalDealTimeline';
 import AutocompleteInput from '../ui/AutocompleteInput';
+import NewClientModal from '../ui/NewClientModal';
+import NewOwnerModal from '../ui/NewOwnerModal';
 
 interface RentalDealFormProps {
   dealType: 'residential' | 'commercial';
   onBack: () => void;
-  onSuccess: () => void;
+  editDealId?: string; // Optional deal ID for editing
 }
 
 interface TeamMember {
@@ -59,7 +61,7 @@ interface DealFormData {
   owner_id?: string;
 }
 
-const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuccess }) => {
+const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editDealId }) => {
   const [formData, setFormData] = useState<DealFormData>({
     project_name: '',
     client_name: '',
@@ -89,6 +91,10 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
   const [ownersLoading, setOwnersLoading] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
   const [createdDealId, setCreatedDealId] = useState<string | null>(null);
+  const [showNewClientModal, setShowNewClientModal] = useState(false);
+  const [showNewOwnerModal, setShowNewOwnerModal] = useState(false);
+  const [pendingClientName, setPendingClientName] = useState('');
+  const [pendingOwnerName, setPendingOwnerName] = useState('');
 
   // Fetch data on component mount
   useEffect(() => {
@@ -96,6 +102,13 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
     fetchClients();
     fetchOwners();
   }, []);
+
+  // Load deal data for editing
+  useEffect(() => {
+    if (editDealId) {
+      loadDealForEdit();
+    }
+  }, [editDealId]);
 
   const fetchTeamMembers = async () => {
     try {
@@ -156,6 +169,50 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
     }
   };
 
+  const loadDealForEdit = async () => {
+    if (!editDealId) return;
+    
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('rental_deals')
+        .select('*')
+        .eq('id', editDealId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setFormData({
+          project_name: data.project_name || '',
+          client_name: data.client_name || '',
+          client_email: data.client_email || '',
+          client_phone: data.client_phone || '',
+          client_address: data.client_address || '',
+          owner_name: data.owner_name || '',
+          owner_email: data.owner_email || '',
+          owner_phone: data.owner_phone || '',
+          owner_address: data.owner_address || '',
+          property_address: data.property_address || '',
+          property_type: data.property_type || '',
+          rental_amount: data.rental_amount?.toString() || '',
+          security_deposit: data.security_deposit?.toString() || '',
+          brokerage_amount: data.brokerage_amount?.toString() || '',
+          start_date: data.start_date || '',
+          end_date: data.end_date || '',
+          team_members: data.team_members || [],
+          additional_notes: data.additional_notes || '',
+          owner_id: data.owner_id
+        });
+      }
+    } catch (error) {
+      console.error('Error loading deal for edit:', error);
+      toast.error('Failed to load deal data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleInputChange = (field: keyof DealFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -176,33 +233,9 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
     }
 
     if (client.id === 'new') {
-      // Create new client
-      try {
-        const { data, error } = await supabase
-          .from('clients')
-          .insert([{ 
-            name: client.name,
-            email: formData.client_email || null,
-            phone: formData.client_phone || null,
-            address: formData.client_address || null
-          }])
-          .select()
-          .single();
-
-        if (error) throw error;
-        
-        setFormData(prev => ({ 
-          ...prev, 
-          client_id: data.id
-        }));
-        
-        // Refresh clients list
-        fetchClients();
-        toast.success('New client created successfully');
-      } catch (error) {
-        console.error('Error creating client:', error);
-        toast.error('Failed to create new client');
-      }
+      // Show modal to create new client
+      setPendingClientName(client.name);
+      setShowNewClientModal(true);
     } else {
       // Select existing client
       setFormData(prev => ({ 
@@ -222,33 +255,9 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
     }
 
     if (owner.id === 'new') {
-      // Create new owner
-      try {
-        const { data, error } = await supabase
-          .from('owners')
-          .insert([{ 
-            name: owner.name,
-            email: formData.owner_email || null,
-            phone: formData.owner_phone || null,
-            address: formData.owner_address || null
-          }])
-          .select()
-          .single();
-
-        if (error) throw error;
-        
-        setFormData(prev => ({ 
-          ...prev, 
-          owner_id: data.id
-        }));
-        
-        // Refresh owners list
-        fetchOwners();
-        toast.success('New owner created successfully');
-      } catch (error) {
-        console.error('Error creating owner:', error);
-        toast.error('Failed to create new owner');
-      }
+      // Show modal to create new owner
+      setPendingOwnerName(owner.name);
+      setShowNewOwnerModal(true);
     } else {
       // Select existing owner
       setFormData(prev => ({ 
@@ -259,6 +268,32 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
         owner_address: owner.address || ''
       }));
     }
+  };
+
+  const handleNewClientSuccess = (client: { id: string; name: string; email?: string; phone?: string; address?: string }) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      client_id: client.id,
+      client_email: client.email || '',
+      client_phone: client.phone || '',
+      client_address: client.address || ''
+    }));
+    fetchClients(); // Refresh the clients list
+    setShowNewClientModal(false);
+    setPendingClientName('');
+  };
+
+  const handleNewOwnerSuccess = (owner: { id: string; name: string; email?: string; phone?: string; address?: string }) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      owner_id: owner.id,
+      owner_email: owner.email || '',
+      owner_phone: owner.phone || '',
+      owner_address: owner.address || ''
+    }));
+    fetchOwners(); // Refresh the owners list
+    setShowNewOwnerModal(false);
+    setPendingOwnerName('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -272,111 +307,202 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
         return;
       }
 
-      // First, create a project for this rental deal
-      const { data: projectData, error: projectError } = await supabase
-        .from('projects')
-        .insert([{
-          name: formData.project_name,
-          description: `${dealType} rental deal for ${formData.client_name}`,
-          client_name: formData.client_name,
-          start_date: formData.start_date,
-          expected_end_date: formData.end_date,
-          status: 'active'
-        }])
-        .select()
-        .single();
+      let projectData: any;
+      let dealData: any;
 
-      if (projectError) throw projectError;
+      if (editDealId) {
+        // Update existing deal
+        const { data: existingDeal, error: fetchError } = await supabase
+          .from('rental_deals')
+          .select('project_id')
+          .eq('id', editDealId)
+          .single();
 
-      // Create the rental deal with project reference
-      const { data: dealData, error: dealError } = await supabase
-        .from('rental_deals')
-        .insert([{
-          project_name: formData.project_name,
-          deal_type: dealType,
-          client_name: formData.client_name,
-          client_email: formData.client_email,
-          client_phone: formData.client_phone,
-          owner_name: formData.owner_name,
-          owner_email: formData.owner_email,
-          owner_phone: formData.owner_phone,
-          property_address: formData.property_address,
-          property_type: formData.property_type,
-          rental_amount: parseFloat(formData.rental_amount) || 0,
-          security_deposit: parseFloat(formData.security_deposit) || 0,
-          brokerage_amount: parseFloat(formData.brokerage_amount) || 0,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
-          additional_notes: formData.additional_notes,
-          status: 'active',
-          current_stage: 1,
-          client_id: formData.client_id,
-          owner_id: formData.owner_id,
-          project_id: projectData.id
-        }])
-        .select()
-        .single();
+        if (fetchError) throw fetchError;
 
-      if (dealError) throw dealError;
+        // Update the project
+        const { data: updatedProject, error: projectError } = await supabase
+          .from('projects')
+          .update({
+            name: formData.project_name,
+            description: `${dealType} rental deal for ${formData.client_name}`,
+            client_name: formData.client_name,
+            start_date: formData.start_date,
+            expected_end_date: formData.end_date,
+            status: 'active'
+          })
+          .eq('id', existingDeal.project_id)
+          .select()
+          .single();
 
-      // Create team member assignments
-      if (formData.team_members.length > 0) {
-        const teamAssignments = formData.team_members.map(memberId => ({
+        if (projectError) throw projectError;
+        projectData = updatedProject;
+
+        // Update the rental deal
+        const { data: updatedDeal, error: dealError } = await supabase
+          .from('rental_deals')
+          .update({
+            project_name: formData.project_name,
+            deal_type: dealType,
+            client_name: formData.client_name,
+            client_email: formData.client_email,
+            client_phone: formData.client_phone,
+            owner_name: formData.owner_name,
+            owner_email: formData.owner_email,
+            owner_phone: formData.owner_phone,
+            property_address: formData.property_address,
+            property_type: formData.property_type,
+            rental_amount: parseFloat(formData.rental_amount) || 0,
+            security_deposit: parseFloat(formData.security_deposit) || 0,
+            brokerage_amount: parseFloat(formData.brokerage_amount) || 0,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            additional_notes: formData.additional_notes,
+            status: 'active',
+            current_stage: 1,
+            client_id: formData.client_id,
+            owner_id: formData.owner_id
+          })
+          .eq('id', editDealId)
+          .select()
+          .single();
+
+        if (dealError) throw dealError;
+        dealData = updatedDeal;
+
+        // Update team member assignments
+        await supabase
+          .from('rental_deal_team_members')
+          .delete()
+          .eq('deal_id', editDealId);
+
+        if (formData.team_members.length > 0) {
+          const teamAssignments = formData.team_members.map(memberId => ({
+            deal_id: editDealId,
+            member_id: memberId,
+            role: 'team_member'
+          }));
+
+          const { error: teamError } = await supabase
+            .from('rental_deal_team_members')
+            .insert(teamAssignments);
+
+          if (teamError) throw teamError;
+        }
+
+        toast.success('Rental deal updated successfully!');
+        setCreatedDealId(editDealId);
+        setShowTimeline(true);
+      } else {
+        // Create new deal
+        // First, create a project for this rental deal
+        const { data: newProjectData, error: projectError } = await supabase
+          .from('projects')
+          .insert([{
+            name: formData.project_name,
+            description: `${dealType} rental deal for ${formData.client_name}`,
+            client_name: formData.client_name,
+            start_date: formData.start_date,
+            expected_end_date: formData.end_date,
+            status: 'active'
+          }])
+          .select()
+          .single();
+
+        if (projectError) throw projectError;
+        projectData = newProjectData;
+
+        // Create the rental deal with project reference
+        const { data: newDealData, error: dealError } = await supabase
+          .from('rental_deals')
+          .insert([{
+            project_name: formData.project_name,
+            deal_type: dealType,
+            client_name: formData.client_name,
+            client_email: formData.client_email,
+            client_phone: formData.client_phone,
+            owner_name: formData.owner_name,
+            owner_email: formData.owner_email,
+            owner_phone: formData.owner_phone,
+            property_address: formData.property_address,
+            property_type: formData.property_type,
+            rental_amount: parseFloat(formData.rental_amount) || 0,
+            security_deposit: parseFloat(formData.security_deposit) || 0,
+            brokerage_amount: parseFloat(formData.brokerage_amount) || 0,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            additional_notes: formData.additional_notes,
+            status: 'active',
+            current_stage: 1,
+            client_id: formData.client_id,
+            owner_id: formData.owner_id,
+            project_id: projectData.id
+          }])
+          .select()
+          .single();
+
+        if (dealError) throw dealError;
+        dealData = newDealData;
+
+        // Create team member assignments for new deal
+        if (formData.team_members.length > 0) {
+          const teamAssignments = formData.team_members.map(memberId => ({
+            deal_id: dealData.id,
+            member_id: memberId,
+            role: 'team_member'
+          }));
+
+          const { error: teamError } = await supabase
+            .from('rental_deal_team_members')
+            .insert(teamAssignments);
+
+          if (teamError) throw teamError;
+        }
+
+        // Create initial stages for the deal
+        const stages = dealType === 'residential' 
+          ? [
+              { name: 'Booking and Document collection', order: 1 },
+              { name: 'Agreement process', order: 2 },
+              { name: 'Formalities and internal work', order: 3 },
+              { name: 'Move-in formalities and Handover', order: 4 },
+              { name: 'Brokerage invoicing and collection', order: 5 },
+              { name: 'Agreement uploading', order: 6 },
+              { name: 'Renewal & other reminders', order: 7 }
+            ]
+          : [
+              { name: 'Booking and Document collection', order: 1 },
+              { name: 'Agreement process', order: 2 },
+              { name: 'Formalities and internal work', order: 3 },
+              { name: 'Interior work cum Rent Free period', order: 4 },
+              { name: 'Move-in formalities and Handover', order: 5 },
+              { name: 'Brokerage invoicing and collection', order: 6 },
+              { name: 'Agreement uploading', order: 7 },
+              { name: 'Renewal reminders', order: 8 }
+            ];
+
+        const stageInserts = stages.map(stage => ({
           deal_id: dealData.id,
-          member_id: memberId,
-          role: 'team_member'
+          stage_name: stage.name,
+          stage_order: stage.order,
+          status: stage.order === 1 ? 'in_progress' : 'pending',
+          estimated_date: null,
+          actual_date: null
         }));
 
-        const { error: teamError } = await supabase
-          .from('rental_deal_team_members')
-          .insert(teamAssignments);
+        const { error: stagesError } = await supabase
+          .from('rental_deal_stages')
+          .insert(stageInserts);
 
-        if (teamError) throw teamError;
+        if (stagesError) throw stagesError;
+
+        toast.success('Rental deal created successfully!');
+        setCreatedDealId(dealData.id);
+        setShowTimeline(true);
       }
-
-      // Create initial stages for the deal
-      const stages = dealType === 'residential' 
-        ? [
-            { name: 'Booking and Document collection', order: 1 },
-            { name: 'Agreement process', order: 2 },
-            { name: 'Formalities and internal work', order: 3 },
-            { name: 'Move-in formalities and Handover', order: 4 },
-            { name: 'Brokerage invoicing and collection', order: 5 },
-            { name: 'Agreement uploading', order: 6 },
-            { name: 'Renewal & other reminders', order: 7 }
-          ]
-        : [
-            { name: 'Booking and Document collection', order: 1 },
-            { name: 'Agreement process', order: 2 },
-            { name: 'Formalities and internal work', order: 3 },
-            { name: 'Interior work cum Rent Free period', order: 4 },
-            { name: 'Move-in formalities and Handover', order: 5 },
-            { name: 'Brokerage invoicing and collection', order: 6 },
-            { name: 'Agreement uploading', order: 7 },
-            { name: 'Renewal reminders', order: 8 }
-          ];
-
-      const stageInserts = stages.map(stage => ({
-        deal_id: dealData.id,
-        stage_name: stage.name,
-        stage_order: stage.order,
-        status: stage.order === 1 ? 'in_progress' : 'pending',
-        estimated_date: null,
-        actual_date: null
-      }));
-
-      const { error: stagesError } = await supabase
-        .from('rental_deal_stages')
-        .insert(stageInserts);
-
-      if (stagesError) throw stagesError;
-
-      toast.success('Rental deal created successfully!');
-      setCreatedDealId(dealData.id);
-      setShowTimeline(true);
     } catch (error) {
-      console.error('Error creating rental deal:', error);
-      toast.error('Failed to create rental deal');
+      console.error('Error saving rental deal:', error);
+      toast.error(`Failed to ${editDealId ? 'update' : 'create'} rental deal`);
     } finally {
       setLoading(false);
     }
@@ -411,9 +537,11 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900 capitalize">
-              {dealType} Rental Deal Form
+              {editDealId ? 'Edit' : 'New'} {dealType} Rental Deal
             </h1>
-            <p className="text-gray-600 mt-1">Fill in the details to create a new rental deal</p>
+            <p className="text-gray-600 mt-1">
+              {editDealId ? 'Update the rental deal details' : 'Fill in the details to create a new rental deal'}
+            </p>
           </div>
         </div>
 
@@ -741,12 +869,34 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, onSuc
                 className="flex items-center space-x-2"
               >
                 <Save className="w-4 h-4" />
-                <span>{loading ? 'Creating Deal...' : 'Create Deal'}</span>
+                <span>{loading ? (editDealId ? 'Updating Deal...' : 'Creating Deal...') : (editDealId ? 'Update Deal' : 'Create Deal')}</span>
               </Button>
             </div>
           </div>
         </form>
       </div>
+
+      {/* New Client Modal */}
+      <NewClientModal
+        isOpen={showNewClientModal}
+        onClose={() => {
+          setShowNewClientModal(false);
+          setPendingClientName('');
+        }}
+        onSuccess={handleNewClientSuccess}
+        initialName={pendingClientName}
+      />
+
+      {/* New Owner Modal */}
+      <NewOwnerModal
+        isOpen={showNewOwnerModal}
+        onClose={() => {
+          setShowNewOwnerModal(false);
+          setPendingOwnerName('');
+        }}
+        onSuccess={handleNewOwnerSuccess}
+        initialName={pendingOwnerName}
+      />
     </div>
   );
 };

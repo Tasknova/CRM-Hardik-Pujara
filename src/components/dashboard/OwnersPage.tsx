@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Eye, Mail, Phone, MapPin, Building } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Mail, Phone, MapPin, Building, Trash2 } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
+import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -23,6 +24,8 @@ const OwnersPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingOwner, setEditingOwner] = useState<Owner | null>(null);
   const [viewingOwner, setViewingOwner] = useState<Owner | null>(null);
+  const [ownerToDelete, setOwnerToDelete] = useState<Owner | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -71,6 +74,41 @@ const OwnersPage: React.FC = () => {
 
   const handleView = (owner: Owner) => {
     setViewingOwner(owner);
+  };
+
+  const handleDelete = (owner: Owner) => {
+    setOwnerToDelete(owner);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!ownerToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('owners')
+        .delete()
+        .eq('id', ownerToDelete.id);
+
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.message.includes('foreign key constraint')) {
+          toast.error(`Cannot delete owner "${ownerToDelete.name}" because they have associated rental deals or other records. Please remove these associations first.`);
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success(`Owner "${ownerToDelete.name}" deleted successfully`);
+      setOwnerToDelete(null);
+      fetchOwners(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting owner:', error);
+      toast.error('Failed to delete owner');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -228,6 +266,13 @@ const OwnersPage: React.FC = () => {
                       title="Edit Owner"
                     >
                       <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(owner)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors duration-200"
+                      title="Delete Owner"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
 
@@ -431,6 +476,17 @@ const OwnersPage: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={!!ownerToDelete}
+        onClose={() => setOwnerToDelete(null)}
+        onConfirm={handleDeleteConfirm}
+        taskName={ownerToDelete?.name || ""}
+        taskDescription={ownerToDelete ? `This will permanently delete the owner "${ownerToDelete.name}" and all associated data. This action cannot be undone.` : ""}
+        projectName="Owner"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

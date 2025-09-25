@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, User, Bell, CheckCircle2, Calendar, Clock, AlertCircle, CheckSquare, Play, Pause } from 'lucide-react';
-import { useTasks } from '../../hooks/useTasks';
+import { useRealtimeTasks } from '../../hooks/useRealtimeTasks';
 import { useLeaves } from '../../hooks/useLeaves';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/auth';
@@ -30,7 +30,7 @@ interface MemberDashboardProps {
 }
 
 const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
-  const { tasks, loading: tasksLoading, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useTasks();
+  const { tasks, loading: tasksLoading, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useRealtimeTasks();
   const { leaves, loading: leavesLoading, error: leavesError, addLeave, updateLeave, deleteLeave } = useLeaves();
   const { user } = useAuth();
   const { projects, loading: projectsLoading, error: projectsError } = useMemberProjects();

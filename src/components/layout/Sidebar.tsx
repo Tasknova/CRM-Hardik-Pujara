@@ -41,7 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isProjectManager = user?.role === 'project_manager';
-  const isSuperAdmin = user?.email === 'contact.tasknova@gmail.com';
+  const isSuperAdmin = user?.email === 'contact.propazone@gmail.com';
 
   const memberTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },

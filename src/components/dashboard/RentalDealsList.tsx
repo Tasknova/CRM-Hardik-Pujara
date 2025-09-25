@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Eye, Calendar, MapPin, User, DollarSign, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, Calendar, MapPin, User, DollarSign, Search, Trash2, Edit } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
@@ -7,11 +7,13 @@ import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import RentalDealTimeline from './RentalDealTimeline';
+import { useRealtimeRentalDeals } from '../../hooks/useRealtimeDeals';
 
 interface RentalDealsListProps {
   dealType: 'residential' | 'commercial';
   onBack: () => void;
   onCreateNew: () => void;
+  onEditDeal: (dealId: string) => void;
 }
 
 interface RentalDeal {
@@ -26,39 +28,20 @@ interface RentalDeal {
   start_date: string | null;
 }
 
-const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onCreateNew }) => {
-  const [deals, setDeals] = useState<RentalDeal[]>([]);
-  const [loading, setLoading] = useState(true);
+const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onCreateNew, onEditDeal }) => {
+  const { deals, loading, error } = useRealtimeRentalDeals(dealType);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [dealToDelete, setDealToDelete] = useState<RentalDeal | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchDeals();
-  }, [dealType]);
-
-  const fetchDeals = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('rental_deals')
-        .select('id, project_name, client_name, property_address, rental_amount, status, current_stage, created_at, start_date')
-        .eq('deal_type', dealType)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setDeals(data || []);
-    } catch (error) {
-      console.error('Error fetching deals:', error);
-      toast.error('Failed to load deals');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleViewDeal = (dealId: string) => {
     setSelectedDealId(dealId);
+  };
+
+  const handleEditDeal = (dealId: string) => {
+    onEditDeal(dealId);
   };
 
   const handleBackFromTimeline = () => {
@@ -71,6 +54,13 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
     
     setIsDeleting(true);
     try {
+      // First, get the project_id from the deal
+      const { data: dealData } = await supabase
+        .from('rental_deals')
+        .select('project_id')
+        .eq('id', dealToDelete.id)
+        .single();
+
       // Get stage IDs first
       const { data: stageData } = await supabase
         .from('rental_deal_stages')
@@ -111,7 +101,7 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
         console.warn('Error deleting team assignments:', teamError);
       }
 
-      // Finally delete the deal
+      // Delete the main deal
       const { error: dealError } = await supabase
         .from('rental_deals')
         .delete()
@@ -119,9 +109,21 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
 
       if (dealError) throw dealError;
 
-      toast.success(`${dealToDelete.project_name} deleted successfully`);
-      setDealToDelete(null);
-      fetchDeals(); // Refresh the list
+      // If there's an associated project, delete it and all its tasks
+      if (dealData?.project_id) {
+        try {
+          // Import the project service to use its deleteProject function
+          const { projectService } = await import('../../services/projects');
+          await projectService.deleteProject(dealData.project_id);
+          console.log('Associated project and all its tasks deleted successfully');
+        } catch (projectError) {
+          console.warn('Error deleting associated project:', projectError);
+          // Don't throw here as the deal is already deleted
+        }
+      }
+
+        toast.success(`${dealToDelete.project_name} deleted successfully`);
+        setDealToDelete(null);
     } catch (error) {
       console.error('Error deleting deal:', error);
       toast.error('Failed to delete deal');
@@ -290,6 +292,13 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
                   {/* Actions */}
                   <div className="flex justify-end space-x-2 pt-2">
                     <button
+                      onClick={() => handleEditDeal(deal.id)}
+                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors duration-200"
+                      title="Edit Deal"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleViewDeal(deal.id)}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors duration-200"
                       title="View Timeline"
@@ -344,7 +353,7 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
           onClose={() => setDealToDelete(null)}
           onConfirm={handleDeleteDeal}
           taskName={dealToDelete?.project_name || ""}
-          taskDescription={dealToDelete ? `${dealToDelete.deal_type} rental deal for ${dealToDelete.client_name}` : ""}
+          taskDescription={dealToDelete ? `This will permanently delete the ${dealToDelete.deal_type} rental deal for ${dealToDelete.client_name}, the associated project, and all tasks assigned to that project. This action cannot be undone.` : ""}
           projectName={dealToDelete?.project_name}
           isLoading={isDeleting}
         />

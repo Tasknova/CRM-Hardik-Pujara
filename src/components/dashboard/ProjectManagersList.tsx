@@ -22,7 +22,6 @@ const ProjectManagerForm: React.FC<{
     department: '',
     hire_date: '',
   });
-  const [adminPassword, setAdminPassword] = useState(''); // NEW
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -75,18 +74,6 @@ const ProjectManagerForm: React.FC<{
         }
         if (!formData.password || formData.password.length < 6) {
           setError('Password must be at least 6 characters');
-          setLoading(false);
-          return;
-        }
-        // Require admin password authentication
-        if (!adminPassword) {
-          setError('Please enter your password to confirm.');
-          setLoading(false);
-          return;
-        }
-        const ok = await authService.verifyAdminPassword(user.id, adminPassword);
-        if (!ok) {
-          setError('Your password is incorrect.');
           setLoading(false);
           return;
         }
@@ -215,21 +202,6 @@ const ProjectManagerForm: React.FC<{
           />
         </div>
 
-        {!isEdit && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Your Password (for confirmation) *
-            </label>
-            <input
-              type="password"
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-              placeholder="Enter your admin password to confirm"
-            />
-          </div>
-        )}
 
         <div className="flex justify-end space-x-3 pt-4">
           <Button variant="outline" onClick={onClose} disabled={loading} type="button">
@@ -254,9 +226,12 @@ const ProjectManagersList: React.FC = () => {
   const fetchProjectManagers = async () => {
     try {
       setLoading(true);
+      console.log('Fetching project managers...');
       const data = await authService.getProjectManagers();
+      console.log('Project managers data:', data);
       setProjectManagers(data);
     } catch (err) {
+      console.error('Error fetching project managers:', err);
       setError('Failed to fetch project managers');
     } finally {
       setLoading(false);
@@ -318,43 +293,41 @@ const ProjectManagersList: React.FC = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {projectManagers.map(pm => (
-          <Card key={pm.id} className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <User className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{pm.name}</h3>
-                  <p className="text-sm text-gray-600 flex items-center gap-1">
-                    <Mail className="w-4 h-4" />
-                    {pm.email}
-                  </p>
-                  {pm.phone && (
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Phone className="w-4 h-4" />
-                      {pm.phone}
-                    </p>
-                  )}
-                </div>
+          <Card key={pm.id} className="p-6 relative">
+            {/* Edit and Delete Icons - Top Center */}
+            <div className="absolute top-3 left-1/2 transform -translate-x-1/2 flex space-x-3">
+              <button
+                onClick={() => handleEdit(pm)}
+                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                title="Edit Project Manager"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => handleDelete(pm.id)}
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                title="Delete Project Manager"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-3 mt-6">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="w-6 h-6 text-blue-600" />
               </div>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={Edit2}
-                  onClick={() => handleEdit(pm)}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon={Trash2}
-                  onClick={() => handleDelete(pm.id)}
-                >
-                  Delete
-                </Button>
+              <div>
+                <h3 className="font-semibold text-gray-900">{pm.name}</h3>
+                <p className="text-sm text-gray-600 flex items-center gap-1">
+                  <Mail className="w-4 h-4" />
+                  {pm.email}
+                </p>
+                {pm.phone && (
+                  <p className="text-sm text-gray-600 flex items-center gap-1">
+                    <Phone className="w-4 h-4" />
+                    {pm.phone}
+                  </p>
+                )}
               </div>
             </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, Plus, Trash2, Edit2, Folder, Link, Unlink, Users } from 'lucide-react';
+import { User, Mail, Phone, Plus, Trash2, Edit2, Folder, Link, Unlink, Users, Eye } from 'lucide-react';
 import { ProjectManager, Project } from '../../types';
 import { authService } from '../../services/auth';
 import { supabase } from '../../lib/supabase';
@@ -35,7 +35,6 @@ const ProjectManagerForm: React.FC<{
     department: '',
     hire_date: '',
   });
-  const [adminPassword, setAdminPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -52,7 +51,6 @@ const ProjectManagerForm: React.FC<{
     } else {
       setFormData({ name: '', email: '', password: '', phone: '', department: '', hire_date: '' });
     }
-    setAdminPassword('');
   }, [initialData, isOpen]);
 
   const isEdit = !!initialData;
@@ -85,17 +83,6 @@ const ProjectManagerForm: React.FC<{
         }
         if (!formData.password || formData.password.length < 6) {
           setError('Password must be at least 6 characters');
-          setLoading(false);
-          return;
-        }
-        if (!adminPassword) {
-          setError('Please enter your password to confirm.');
-          setLoading(false);
-          return;
-        }
-        const ok = await authService.verifyAdminPassword(user.id, adminPassword);
-        if (!ok) {
-          setError('Your password is incorrect.');
           setLoading(false);
           return;
         }
@@ -224,21 +211,6 @@ const ProjectManagerForm: React.FC<{
           />
         </div>
 
-        {!isEdit && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Your Password (for confirmation) *
-            </label>
-            <input
-              type="password"
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-              placeholder="Enter your admin password to confirm"
-            />
-          </div>
-        )}
 
         <div className="flex justify-end space-x-3 pt-4">
           <Button variant="outline" onClick={onClose} disabled={loading} type="button">
@@ -469,6 +441,7 @@ const ProjectManagerManagement: React.FC = () => {
   const [error, setError] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editProjectManager, setEditProjectManager] = useState<ProjectManager | null>(null);
+  const [viewProjectManager, setViewProjectManager] = useState<ProjectManager | null>(null);
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [selectedProjectManager, setSelectedProjectManager] = useState<ProjectManager | null>(null);
   const [assignments, setAssignments] = useState<ProjectManagerAssignment[]>([]);
@@ -528,6 +501,10 @@ const ProjectManagerManagement: React.FC = () => {
   const handleEdit = (projectManager: ProjectManager) => {
     setEditProjectManager(projectManager);
     setIsFormOpen(true);
+  };
+
+  const handleView = (projectManager: ProjectManager) => {
+    setViewProjectManager(projectManager);
   };
 
   const handleFormSuccess = () => {
@@ -636,45 +613,48 @@ const ProjectManagerManagement: React.FC = () => {
           const assignedProjects = getAssignedProjects(pm.id);
           
           return (
-            <Card key={pm.id} className="p-6 hover:shadow-lg transition-all duration-200 border border-gray-200 hover:border-blue-300">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
-                    <User className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-lg">{pm.name}</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Mail className="w-4 h-4" />
-                      {pm.email}
-                    </p>
-                    {pm.phone && (
-                      <p className="text-sm text-gray-600 flex items-center gap-1">
-                        <Phone className="w-4 h-4" />
-                        {pm.phone}
-                      </p>
-                    )}
-                  </div>
+            <Card key={pm.id} className="p-6 hover:shadow-lg transition-all duration-200 border border-gray-200 hover:border-blue-300 relative">
+              {/* View, Edit and Delete Icons - Top Center */}
+              <div className="absolute top-3 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                <button
+                  onClick={() => handleView(pm)}
+                  className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-all duration-200 hover:scale-110 shadow-sm hover:shadow-md"
+                  title="View Project Manager"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleEdit(pm)}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200 hover:scale-110 shadow-sm hover:shadow-md"
+                  title="Edit Project Manager"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(pm.id)}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all duration-200 hover:scale-110 shadow-sm hover:shadow-md"
+                  title="Delete Project Manager"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-3 mt-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-md">
+                  <User className="w-6 h-6 text-white" />
                 </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    icon={Edit2}
-                    onClick={() => handleEdit(pm)}
-                    className="hover:bg-blue-50 hover:border-blue-300"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={Trash2}
-                    onClick={() => handleDelete(pm.id)}
-                    className="hover:bg-red-50"
-                  >
-                    Delete
-                  </Button>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-lg">{pm.name}</h3>
+                  <p className="text-sm text-gray-600 flex items-center gap-1">
+                    <Mail className="w-4 h-4" />
+                    {pm.email}
+                  </p>
+                  {pm.phone && (
+                    <p className="text-sm text-gray-600 flex items-center gap-1">
+                      <Phone className="w-4 h-4" />
+                      {pm.phone}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -786,6 +766,99 @@ const ProjectManagerManagement: React.FC = () => {
         projectManager={selectedProjectManager}
         onSuccess={handleAssignmentSuccess}
       />
+
+      {/* View Project Manager Modal */}
+      <Modal
+        isOpen={!!viewProjectManager}
+        onClose={() => setViewProjectManager(null)}
+        title="Project Manager Details"
+      >
+        {viewProjectManager && (
+          <div className="space-y-6">
+            <div className="flex items-center space-x-4">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <User className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">{viewProjectManager.name}</h3>
+                <p className="text-gray-600">{viewProjectManager.email}</p>
+                {viewProjectManager.phone && (
+                  <p className="text-gray-600">{viewProjectManager.phone}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {viewProjectManager.department && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-1">Department</h4>
+                  <p className="text-gray-700">{viewProjectManager.department}</p>
+                </div>
+              )}
+
+              {viewProjectManager.hire_date && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-900 mb-1">Hire Date</h4>
+                  <p className="text-gray-700">{new Date(viewProjectManager.hire_date).toLocaleDateString()}</p>
+                </div>
+              )}
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-1">Status</h4>
+                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  viewProjectManager.is_active 
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                    : 'bg-red-100 text-red-800 border border-red-200'
+                }`}>
+                  {viewProjectManager.is_active ? 'Active' : 'Inactive'}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-1">Assigned Projects</h4>
+                <p className="text-gray-700">{getAssignedProjects(viewProjectManager.id).length} projects</p>
+              </div>
+            </div>
+
+            {getAssignedProjects(viewProjectManager.id).length > 0 && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Project Assignments</h4>
+                <div className="space-y-2">
+                  {getAssignedProjects(viewProjectManager.id).map(project => (
+                    <div key={project.id} className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                      <h5 className="font-medium text-gray-900">{project.name}</h5>
+                      {project.client_name && (
+                        <p className="text-sm text-gray-600">Client: {project.client_name}</p>
+                      )}
+                      {project.description && (
+                        <p className="text-sm text-gray-600 mt-1">{project.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+              <Button
+                variant="outline"
+                onClick={() => setViewProjectManager(null)}
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  setViewProjectManager(null);
+                  handleEdit(viewProjectManager);
+                }}
+                icon={Edit2}
+              >
+                Edit Project Manager
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Modal from '../ui/Modal';
 import { Plus, Users, BarChart3, UserPlus, ChevronDown, CheckCircle2, Calendar, Clock, AlertCircle, Calendar as CalendarIcon, Pencil, CalendarDays, List, Search, CheckSquare, Trash2, Play, Pause } from 'lucide-react';
-import { useTasks } from '../../hooks/useTasks';
+import { useRealtimeTasks } from '../../hooks/useRealtimeTasks';
 import { useLeaves } from '../../hooks/useLeaves';
 import { useDailyTasks } from '../../hooks/useDailyTasks';
 import { TaskFilters } from '../../types';
@@ -18,7 +18,7 @@ import AdminsList from './AdminsList';
 import ProjectManagerManagement from './ProjectManagerManagement';
 import { useAuth } from '../../contexts/AuthContext';
 import ProjectCard from './ProjectCard';
-import { useProjects } from '../../hooks/useProjects';
+import { useRealtimeProjects } from '../../hooks/useRealtimeProjects';
 import { supabase } from '../../lib/supabase';
 import { Task } from '../../types';
 import { Project } from '../../types';
@@ -26,6 +26,7 @@ import { authService } from '../../services/auth';
 import { useEffect } from 'react';
 import { format } from 'timeago.js';
 import { toast } from 'sonner';
+import AutocompleteInput from '../ui/AutocompleteInput';
 import LeaveForm from './LeaveForm';
 import HolidayCalendar from './HolidayCalendar';
 import { DailyTasksPage } from './DailyTasksPage';
@@ -53,9 +54,9 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange }) => {
   // All hooks at the top
-  const { tasks, loading: tasksLoading, error: tasksError, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useTasks();
+  const { tasks, loading: tasksLoading, error: tasksError, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useRealtimeTasks();
   const { leaves, loading: leavesLoading, addLeave, deleteLeave, updateLeave, setLeaves } = useLeaves();
-  const { projects, loading: projectsLoading, error: projectsError, addProject, updateProject, deleteProject, fetchProjects } = useProjects();
+  const { projects, loading: projectsLoading, error: projectsError, addProject, updateProject, deleteProject, fetchProjects } = useRealtimeProjects();
   const { tasks: dailyTasks, loading: dailyTasksLoading } = useDailyTasks({});
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [taskFilters, setTaskFilters] = useState<TaskFilters>({});
@@ -71,7 +72,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange 
   const [projectForm, setProjectForm] = useState({
     name: '',
     description: '',
-    client_name: '',
+    client_id: '',
+    client_name: '', // Keep for display purposes
     start_date: '',
     expected_end_date: '',
     project_manager_id: ''
@@ -83,17 +85,43 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange 
       setProjectForm({
         name: '',
         description: '',
+        client_id: '',
         client_name: '',
         start_date: '',
         expected_end_date: '',
         project_manager_id: ''
       });
+    } else {
+      fetchClients();
     }
   }, [isProjectFormOpen]);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [editProject, setEditProject] = useState<Project | null>(null);
+  const [editProjectForm, setEditProjectForm] = useState({
+    name: '',
+    description: '',
+    client_id: '',
+    client_name: '',
+    start_date: '',
+    expected_end_date: '',
+    status: 'active' as 'active' | 'completed' | 'on_hold' | 'cancelled'
+  });
+  
+  // Debug log for showClientModal state changes
+  useEffect(() => {
+    console.log('showClientModal state changed to:', showClientModal);
+  }, [showClientModal]);
+  const [clientForm, setClientForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: ''
+  });
   const { user } = useAuth();
-  const isSuperAdmin = useMemo(() => user?.email === 'contact.tasknova@gmail.com', [user?.email]);
+  const isSuperAdmin = useMemo(() => user?.email === 'contact.propazone@gmail.com', [user?.email]);
   const [profileForm, setProfileForm] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -106,15 +134,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange 
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState('');
-  const [editProject, setEditProject] = useState<Project | null>(null);
-  const [editProjectForm, setEditProjectForm] = useState({
-    name: '',
-    description: '',
-    client_name: '',
-    start_date: '',
-    expected_end_date: '',
-    status: 'active'
-  });
 
 // --- Holiday Add Handler ---
 const handleAddHoliday = async (holidayData: { name: string; date: string; description?: string }) => {
@@ -852,32 +871,272 @@ const handleDeleteHoliday = async (holidayId: string) => {
     await addTask(task as any); // 'as any' to satisfy the type, since addTask expects created_by
   };
 
-  const handleEditProject = (project: Project) => {
+  const handleEditProject = async (project: Project) => {
     setEditProject(project);
+    // Load clients before opening modal
+    await fetchClients();
     setEditProjectForm({
       name: project.name,
       description: project.description || '',
+      client_id: project.client_id || '',
       client_name: project.client_name || '',
       start_date: project.start_date || '',
       expected_end_date: project.expected_end_date || '',
-      status: project.status || 'active'
+      status: (project.status || 'active') as 'active' | 'completed' | 'on_hold' | 'cancelled'
     });
   };
 
   const handleUpdateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editProject) return;
+    
+    try {
     await updateProject(editProject.id, editProjectForm);
+      toast.success('Project updated successfully!');
     setEditProject(null);
+      fetchProjects(); // Refresh the projects list
+    } catch (error) {
+      console.error('Error updating project:', error);
+      toast.error('Failed to update project');
+    }
   };
 
   const handleDeleteProject = async (id: string) => {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the project "${project.name}"?\n\n` +
+      `This will permanently delete:\n` +
+      `• The project and all its data\n` +
+      `• All associated tasks and daily tasks\n` +
+      `• All project manager assignments\n` +
+      `• All rental and builder deals linked to this project\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (confirmed) {
+      try {
     await deleteProject(id);
+        toast.success(`Project "${project.name}" deleted successfully`);
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        toast.error('Failed to delete project');
+      }
+    }
   };
 
   const handleProjectUpdate = (updatedProject: Project) => {
     // Update the project in the local state
     fetchProjects();
+  };
+
+  // Client management functions
+  const fetchClients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      setClients(data || []);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    }
+  };
+
+  const handleClientSelect = async (client: any) => {
+    console.log('handleClientSelect called with:', client);
+    
+    // Handle the case where AutocompleteInput passes an object with id: 'new'
+    if (client && client.id === 'new' && client.name) {
+      console.log('Creating new client with name:', client.name);
+      
+      try {
+        console.log('Creating client directly:', client.name);
+        // Create the client record directly
+        const { data, error } = await supabase
+          .from('clients')
+          .insert([{
+            name: client.name.trim(),
+            email: '',
+            phone: '',
+            address: ''
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        console.log('Client created successfully:', data);
+        
+        // Update clients list
+        setClients(prev => [...prev, { id: data.id, name: data.name }]);
+        
+        // Update project form with new client
+        setProjectForm(prev => ({ 
+          ...prev, 
+          client_id: data.id,
+          client_name: data.name 
+        }));
+        
+        toast.success('Client created successfully');
+      } catch (error) {
+        console.error('Error creating client:', error);
+        toast.error('Failed to create client');
+      }
+      return;
+    }
+    
+    // Handle the case where an existing client is selected
+    if (client && client.id && client.name) {
+      console.log('Selected existing client:', client);
+      setProjectForm(prev => ({ 
+        ...prev, 
+        client_id: client.id,
+        client_name: client.name 
+      }));
+      return;
+    }
+    
+    // Handle the case where a string is passed (legacy support)
+    if (typeof client === 'string') {
+      const clientName = client;
+      if (!clientName || typeof clientName !== 'string') {
+        console.error('Invalid clientName:', clientName);
+        return;
+      }
+      
+      const existingClient = clients.find(c => c.name && c.name.toLowerCase() === clientName.toLowerCase());
+      
+      if (existingClient) {
+        setProjectForm(prev => ({ 
+          ...prev, 
+          client_id: existingClient.id,
+          client_name: existingClient.name 
+        }));
+      } else {
+        // Show create new client modal
+        setClientForm({ name: clientName, email: '', phone: '', address: '' });
+        setShowClientModal(true);
+      }
+    }
+  };
+
+  const handleEditClientSelect = async (client: any) => {
+    console.log('handleEditClientSelect called with:', client);
+    
+    // Handle the case where AutocompleteInput passes an object with id: 'new'
+    if (client && client.id === 'new' && client.name) {
+      console.log('Creating new client with name:', client.name);
+      
+      try {
+        console.log('Creating client directly:', client.name);
+        // Create the client record directly
+        const { data, error } = await supabase
+          .from('clients')
+          .insert([{
+            name: client.name.trim(),
+            email: '',
+            phone: '',
+            address: ''
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        console.log('Client created successfully:', data);
+        
+        // Update clients list
+        setClients(prev => [...prev, { id: data.id, name: data.name }]);
+        
+        // Update edit project form with new client
+        setEditProjectForm(prev => ({ 
+          ...prev, 
+          client_id: data.id,
+          client_name: data.name 
+        }));
+        
+        toast.success('Client created successfully');
+      } catch (error) {
+        console.error('Error creating client:', error);
+        toast.error('Failed to create client');
+      }
+      return;
+    }
+    
+    // Handle the case where an existing client is selected
+    if (client && client.id && client.name) {
+      console.log('Selected existing client:', client);
+      setEditProjectForm(prev => ({ 
+        ...prev, 
+        client_id: client.id,
+        client_name: client.name 
+      }));
+      return;
+    }
+    
+    // Handle the case where a string is passed (legacy support)
+    if (typeof client === 'string') {
+      const clientName = client;
+      if (!clientName || typeof clientName !== 'string') {
+        console.error('Invalid clientName:', clientName);
+        return;
+      }
+      
+      const existingClient = clients.find(c => c.name && c.name.toLowerCase() === clientName.toLowerCase());
+      
+      if (existingClient) {
+        setEditProjectForm(prev => ({ 
+          ...prev, 
+          client_id: existingClient.id,
+          client_name: existingClient.name 
+        }));
+      } else {
+        // For edit mode, just set the name and let user create via dropdown
+        setEditProjectForm(prev => ({ 
+          ...prev, 
+          client_name: clientName 
+        }));
+      }
+    }
+  };
+
+  const handleCreateClient = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .insert([{
+          name: clientForm.name,
+          email: clientForm.email,
+          phone: clientForm.phone,
+          address: clientForm.address
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Update clients list
+      setClients(prev => [...prev, { id: data.id, name: data.name }]);
+      
+      // Update project form with new client
+      setProjectForm(prev => ({ ...prev, client_name: data.name }));
+
+      // Close modal and reset form
+      setShowClientModal(false);
+      setClientForm({ name: '', email: '', phone: '', address: '' });
+
+      // Reopen the project form modal
+      setIsProjectFormOpen(true);
+
+      toast.success('Client created successfully');
+    } catch (error) {
+      console.error('Error creating client:', error);
+      toast.error('Failed to create client');
+    }
   };
 
   // Add this function to toggle the open state for each section
@@ -2023,7 +2282,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
                 fetchProjects();
                 
                 setIsProjectFormOpen(false);
-                setProjectForm({ name: '', description: '', client_name: '', start_date: '', expected_end_date: '', project_manager_id: '' });
+                setProjectForm({ name: '', description: '', client_id: '', client_name: '', start_date: '', expected_end_date: '', project_manager_id: '' });
               } catch (error) {
                 console.error('Failed to create project:', error);
                 toast.error('Failed to create project');
@@ -2043,11 +2302,13 @@ const handleDeleteHoliday = async (holidayId: string) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                placeholder="Client Name"
+              <AutocompleteInput
+                label=""
                 value={projectForm.client_name}
-                onChange={e => setProjectForm(f => ({ ...f, client_name: e.target.value }))}
+                onChange={(value) => setProjectForm(f => ({ ...f, client_name: value }))}
+                onSelect={handleClientSelect}
+                options={clients}
+                placeholder="Type client name..."
               />
             </div>
             <div>
@@ -2113,13 +2374,26 @@ const handleDeleteHoliday = async (holidayId: string) => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+              <select
                 className="w-full border rounded px-3 py-2"
-                placeholder="Client Name"
-                value={editProjectForm.client_name}
-                onChange={e => setEditProjectForm(f => ({ ...f, client_name: e.target.value }))}
-              />
+                value={editProjectForm.client_id}
+                onChange={e => {
+                  const selectedClient = clients.find(c => c.id === e.target.value);
+                  setEditProjectForm(f => ({ 
+                    ...f, 
+                    client_id: e.target.value,
+                    client_name: selectedClient?.name || ''
+                  }));
+                }}
+              >
+                <option value="">Select a client...</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -2321,7 +2595,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
   // Add admin management tab for admin
   if (activeTab === 'admin-management') {
     // Only Super-Admin can see this section
-    if (!user || user.email !== 'contact.tasknova@gmail.com') {
+    if (!user || user.email !== 'contact.propazone@gmail.com') {
       return (
         <div className="p-8 text-center text-gray-500">You do not have access to this section.</div>
       );
@@ -3019,7 +3293,207 @@ const handleDeleteHoliday = async (holidayId: string) => {
     return <LoanProvidersPage />;
   }
 
-  return null;
+  return (
+    <>
+      {/* Client Creation Modal */}
+      <Modal 
+        isOpen={showClientModal} 
+        onClose={() => {
+          console.log('Modal onClose called');
+          setShowClientModal(false);
+          setClientForm({ name: '', email: '', phone: '', address: '' });
+        }} 
+        title="Create New Client"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); handleCreateClient(); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+            <input
+              type="text"
+              required
+              className="w-full border rounded px-3 py-2"
+              placeholder="Client Name"
+              value={clientForm.name}
+              onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              className="w-full border rounded px-3 py-2"
+              placeholder="client@example.com"
+              value={clientForm.email}
+              onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              className="w-full border rounded px-3 py-2"
+              placeholder="+91 9876543210"
+              value={clientForm.phone}
+              onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <textarea
+              className="w-full border rounded px-3 py-2"
+              placeholder="Client Address"
+              value={clientForm.address}
+              onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowClientModal(false);
+                setClientForm({ name: '', email: '', phone: '', address: '' });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Create Client
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Project Modal */}
+      <Modal 
+        isOpen={!!editProject} 
+        onClose={() => {
+          setEditProject(null);
+          setEditProjectForm({
+            name: '',
+            description: '',
+            client_id: '',
+            client_name: '',
+            start_date: '',
+            expected_end_date: '',
+            status: 'active' as 'active' | 'completed' | 'on_hold' | 'cancelled'
+          });
+        }} 
+        title="Edit Project"
+      >
+        <form onSubmit={handleUpdateProject} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              placeholder="Project Name"
+              value={editProjectForm.name}
+              onChange={e => setEditProjectForm(f => ({ ...f, name: e.target.value }))}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
+            {clients.length === 0 ? (
+              <div className="text-sm text-gray-500 mb-2">Loading clients...</div>
+            ) : null}
+            
+            {/* Simple select dropdown */}
+            <select
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              value={editProjectForm.client_id}
+              onChange={(e) => {
+                console.log('Client selected:', e.target.value);
+                const selectedClient = clients.find(c => c.id === e.target.value);
+                console.log('Selected client:', selectedClient);
+                setEditProjectForm(f => ({ 
+                  ...f, 
+                  client_id: e.target.value,
+                  client_name: selectedClient?.name || ''
+                }));
+              }}
+            >
+              <option value="">Select a client...</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+            
+            <div className="text-xs text-gray-500 mt-1">
+              Available clients: {clients.length} | Current client_id: {editProjectForm.client_id}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              className="w-full border rounded px-3 py-2"
+              placeholder="Description"
+              value={editProjectForm.description}
+              onChange={e => setEditProjectForm(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              type="date"
+              placeholder="Start Date"
+              value={editProjectForm.start_date}
+              onChange={e => setEditProjectForm(f => ({ ...f, start_date: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Expected End Date</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              type="date"
+              placeholder="Expected End Date"
+              value={editProjectForm.expected_end_date}
+              onChange={e => setEditProjectForm(f => ({ ...f, expected_end_date: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              className="w-full border rounded px-3 py-2"
+              value={editProjectForm.status}
+              onChange={e => setEditProjectForm(f => ({ ...f, status: e.target.value as 'active' | 'completed' | 'on_hold' | 'cancelled' }))}
+            >
+              <option value="active">Active</option>
+              <option value="on_hold">On Hold</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div className="flex justify-end space-x-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setEditProject(null);
+                setEditProjectForm({
+                  name: '',
+                  description: '',
+                  client_id: '',
+                  client_name: '',
+                  start_date: '',
+                  expected_end_date: '',
+                  status: 'active' as 'active' | 'completed' | 'on_hold' | 'cancelled'
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Update Project
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
 };
 
 export default AdminDashboard;

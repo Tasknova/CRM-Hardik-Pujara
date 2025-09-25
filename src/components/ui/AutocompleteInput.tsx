@@ -37,9 +37,10 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (value && options) {
+    if (value && options && Array.isArray(options)) {
       const filtered = options.filter(option =>
-        option && option.name && option.name.toLowerCase().includes(value.toLowerCase())
+        option && option.name && typeof option.name === 'string' && 
+        typeof value === 'string' && option.name.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredOptions(filtered);
     } else {
@@ -88,18 +89,27 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
   };
 
   const handleCreateNew = () => {
+    console.log('Create new clicked with value:', value);
     if (value.trim()) {
       // Signal that we want to create a new entry
+      console.log('Calling onSelect with:', { id: 'new', name: value.trim() });
       onSelect({ id: 'new', name: value.trim() });
       setIsOpen(false);
     }
   };
 
-  const exactMatch = options && options.find(option => 
-    option && option.name && value && option.name.toLowerCase() === value.toLowerCase()
+  const exactMatch = options && Array.isArray(options) && options.find(option => 
+    option && option.name && typeof option.name === 'string' && 
+    value && typeof value === 'string' && option.name.toLowerCase() === value.toLowerCase()
   );
 
   const showCreateOption = value && value.trim() && !exactMatch && filteredOptions.length === 0;
+  console.log('AutocompleteInput debug:', {
+    value,
+    exactMatch,
+    filteredOptionsLength: filteredOptions.length,
+    showCreateOption
+  });
 
   return (
     <div className="relative">
@@ -185,7 +195,7 @@ const AutocompleteInput: React.FC<AutocompleteInputProps> = ({
                     <span className="font-medium">Create "{value}"</span>
                   </div>
                   <div className="text-xs text-gray-500 ml-6">
-                    Add as new {label.toLowerCase()}
+                    Add as new {label && label.toLowerCase ? label.toLowerCase() : 'item'}
                   </div>
                 </div>
               )}

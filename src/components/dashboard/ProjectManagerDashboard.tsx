@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Modal from '../ui/Modal';
 import { Plus, Users, BarChart3, UserPlus, ChevronDown, CheckCircle2, Calendar, Clock, AlertCircle, Calendar as CalendarIcon, Pencil, CalendarDays, List, Search, CheckSquare, Play, Pause } from 'lucide-react';
-import { useTasks } from '../../hooks/useTasks';
+import { useRealtimeTasks } from '../../hooks/useRealtimeTasks';
 import { useLeaves } from '../../hooks/useLeaves';
 import { useDailyTasks } from '../../hooks/useDailyTasks';
 import { TaskFilters } from '../../types';
@@ -15,7 +15,7 @@ import DashboardStats from './DashboardStats';
 import MembersList from './MembersList';
 import { useAuth } from '../../contexts/AuthContext';
 import ProjectCard from './ProjectCard';
-import { useProjects } from '../../hooks/useProjects';
+import { useRealtimeProjects } from '../../hooks/useRealtimeProjects';
 import { supabase } from '../../lib/supabase';
 import { Task } from '../../types';
 import { Project } from '../../types';
@@ -23,6 +23,7 @@ import { authService } from '../../services/auth';
 import { useEffect } from 'react';
 import { format } from 'timeago.js';
 import { toast } from 'sonner';
+import AutocompleteInput from '../ui/AutocompleteInput';
 import { DailyTasksPage } from './DailyTasksPage';
 import LeaveCalendar from './LeaveCalendar';
 import LeaveForm from './LeaveForm';
@@ -39,9 +40,9 @@ interface ProjectManagerDashboardProps {
 
 const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activeTab }) => {
   // All hooks at the top
-  const { tasks, loading: tasksLoading, error: tasksError, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useTasks();
+  const { tasks, loading: tasksLoading, error: tasksError, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useRealtimeTasks();
   const { leaves, loading: leavesLoading, error: leavesError, addLeave, deleteLeave, updateLeave, setLeaves } = useLeaves();
-  const { projects, loading: projectsLoading, error: projectsError, addProject, updateProject, deleteProject, fetchProjects } = useProjects();
+  const { projects, loading: projectsLoading, error: projectsError, addProject, updateProject, deleteProject, fetchProjects } = useRealtimeProjects();
   const { tasks: dailyTasks, loading: dailyTasksLoading } = useDailyTasks({});
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
   const [assignedProjectsLoading, setAssignedProjectsLoading] = useState(true);
@@ -59,9 +60,18 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
   const [projectForm, setProjectForm] = useState({
     name: '',
     description: '',
+    client_id: '',
     client_name: '',
     start_date: '',
     expected_end_date: ''
+  });
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [clientForm, setClientForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: ''
   });
 
   // Reset project form when modal closes
@@ -70,10 +80,13 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
       setProjectForm({
         name: '',
         description: '',
+        client_id: '',
         client_name: '',
         start_date: '',
         expected_end_date: ''
       });
+    } else {
+      fetchClients();
     }
   }, [isProjectFormOpen]);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
@@ -95,6 +108,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
   const [editProjectForm, setEditProjectForm] = useState({
     name: '',
     description: '',
+    client_id: '',
     client_name: '',
     start_date: '',
     expected_end_date: '',
@@ -507,11 +521,14 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     await addTask(task as any); // 'as any' to satisfy the type, since addTask expects created_by
   };
 
-  const handleEditProject = (project: Project) => {
+  const handleEditProject = async (project: Project) => {
     setEditProject(project);
+    // Load clients before opening modal
+    await fetchClients();
     setEditProjectForm({
       name: project.name,
       description: project.description || '',
+      client_id: project.client_id || '',
       client_name: project.client_name || '',
       start_date: project.start_date || '',
       expected_end_date: project.expected_end_date || '',
@@ -527,12 +544,109 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
   };
 
   const handleDeleteProject = async (id: string) => {
-    await deleteProject(id);
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the project "${project.name}"?\n\n` +
+      `This will permanently delete:\n` +
+      `• The project and all its data\n` +
+      `• All associated tasks and daily tasks\n` +
+      `• All project manager assignments\n` +
+      `• All rental and builder deals linked to this project\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (confirmed) {
+      try {
+        await deleteProject(id);
+        toast.success(`Project "${project.name}" deleted successfully`);
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        toast.error('Failed to delete project');
+      }
+    }
   };
 
   const handleProjectUpdate = (updatedProject: Project) => {
     // Update the project in the local state
     fetchProjects();
+  };
+
+  // Client management functions
+  const fetchClients = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name');
+      
+      if (error) throw error;
+      setClients(data || []);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    }
+  };
+
+  const handleClientSelect = async (client: any) => {
+    // Handle the case where AutocompleteInput passes an object with id: 'new'
+    if (client && client.id === 'new' && client.name) {
+      // Show create new client modal
+      setClientForm({ name: client.name, email: '', phone: '', address: '' });
+      setShowClientModal(true);
+      return;
+    }
+    
+    // Handle the case where a string is passed (legacy support)
+    if (typeof client === 'string') {
+      const clientName = client;
+      if (!clientName || typeof clientName !== 'string') {
+        console.error('Invalid clientName:', clientName);
+        return;
+      }
+      
+      const existingClient = clients.find(c => c.name && c.name.toLowerCase() === clientName.toLowerCase());
+      
+      if (existingClient) {
+        setProjectForm(prev => ({ ...prev, client_name: existingClient.name }));
+      } else {
+        // Show create new client modal
+        setClientForm({ name: clientName, email: '', phone: '', address: '' });
+        setShowClientModal(true);
+      }
+    }
+  };
+
+  const handleCreateClient = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .insert([{
+          name: clientForm.name,
+          email: clientForm.email,
+          phone: clientForm.phone,
+          address: clientForm.address
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      // Update clients list
+      setClients(prev => [...prev, { id: data.id, name: data.name }]);
+      
+      // Update project form with new client
+      setProjectForm(prev => ({ ...prev, client_name: data.name }));
+      
+      // Close modal and reset form
+      setShowClientModal(false);
+      setClientForm({ name: '', email: '', phone: '', address: '' });
+      
+      toast.success('Client created successfully');
+    } catch (error) {
+      console.error('Error creating client:', error);
+      toast.error('Failed to create client');
+    }
   };
 
   // Add this function to toggle the open state for each section
@@ -1224,12 +1338,29 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-              <input
-                className="w-full border rounded px-3 py-2"
-                placeholder="Client Name"
-                value={projectForm.client_name}
-                onChange={e => setProjectForm(f => ({ ...f, client_name: e.target.value }))}
-              />
+              <div className="flex space-x-2">
+                <div className="flex-1">
+                  <AutocompleteInput
+                    label=""
+                    value={projectForm.client_name}
+                    onChange={(value) => setProjectForm(f => ({ ...f, client_name: value }))}
+                    onSelect={handleClientSelect}
+                    options={clients}
+                    placeholder="Type client name..."
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setClientForm({ name: projectForm.client_name || '', email: '', phone: '', address: '' });
+                    setShowClientModal(true);
+                  }}
+                  className="px-4 py-2"
+                >
+                  Create New
+                </Button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -1266,7 +1397,18 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           </form>
         </Modal>
         {/* Edit Project Modal */}
-        <Modal isOpen={!!editProject} onClose={() => setEditProject(null)} title="Edit Project">
+        <Modal isOpen={!!editProject} onClose={() => {
+          setEditProject(null);
+          setEditProjectForm({
+            name: '',
+            description: '',
+            client_id: '',
+            client_name: '',
+            start_date: '',
+            expected_end_date: '',
+            status: 'active'
+          });
+        }} title="Edit Project">
           <form onSubmit={handleUpdateProject} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
@@ -1279,13 +1421,26 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+              <select
                 className="w-full border rounded px-3 py-2"
-                placeholder="Client Name"
-                value={editProjectForm.client_name}
-                onChange={e => setEditProjectForm(f => ({ ...f, client_name: e.target.value }))}
-              />
+                value={editProjectForm.client_id}
+                onChange={e => {
+                  const selectedClient = clients.find(c => c.id === e.target.value);
+                  setEditProjectForm(f => ({ 
+                    ...f, 
+                    client_id: e.target.value,
+                    client_name: selectedClient?.name || ''
+                  }));
+                }}
+              >
+                <option value="">Select a client...</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
@@ -1380,7 +1535,77 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     return <DailyTasksPage />;
   }
 
-  return null;
+  return (
+    <>
+      {/* Client Creation Modal */}
+      <Modal 
+        isOpen={showClientModal} 
+        onClose={() => {
+          setShowClientModal(false);
+          setClientForm({ name: '', email: '', phone: '', address: '' });
+        }} 
+        title="Create New Client"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); handleCreateClient(); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
+            <input
+              type="text"
+              required
+              className="w-full border rounded px-3 py-2"
+              placeholder="Client Name"
+              value={clientForm.name}
+              onChange={e => setClientForm(f => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              className="w-full border rounded px-3 py-2"
+              placeholder="client@example.com"
+              value={clientForm.email}
+              onChange={e => setClientForm(f => ({ ...f, email: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input
+              type="tel"
+              className="w-full border rounded px-3 py-2"
+              placeholder="+91 9876543210"
+              value={clientForm.phone}
+              onChange={e => setClientForm(f => ({ ...f, phone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <textarea
+              className="w-full border rounded px-3 py-2"
+              placeholder="Client Address"
+              value={clientForm.address}
+              onChange={e => setClientForm(f => ({ ...f, address: e.target.value }))}
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowClientModal(false);
+                setClientForm({ name: '', email: '', phone: '', address: '' });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Create Client
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
 };
 
 export default ProjectManagerDashboard;

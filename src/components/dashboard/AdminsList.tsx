@@ -312,7 +312,7 @@ const AdminsList: React.FC = () => {
           {admins.map((admin) => (
             <Card key={admin.id} hover className="relative cursor-pointer">
               {/* Hide edit/delete for Super-Admin */}
-              {!(admin.email === 'contact.tasknova@gmail.com') && (
+              {!(admin.email === 'contact.propazone@gmail.com') && (
                 <>
                   <button
                     title="Edit Admin"

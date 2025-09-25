@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Search, Eye, Trash2, Building, MapPin, Calendar, DollarSign, Users } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Eye, Trash2, Building, MapPin, Calendar, DollarSign, Users, Edit } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -8,6 +8,7 @@ import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import BuilderDealTimeline from './BuilderDealTimeline';
+import { useRealtimeBuilderDeals } from '../../hooks/useRealtimeDeals';
 
 interface BuilderDeal {
   id: string;
@@ -33,45 +34,29 @@ interface BuilderDealsListProps {
   dealType: 'residential' | 'commercial';
   onBack: () => void;
   onCreateNew: () => void;
+  onEditDeal: (dealId: string) => void;
 }
 
-const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, onCreateNew }) => {
-  const [deals, setDeals] = useState<BuilderDeal[]>([]);
-  const [loading, setLoading] = useState(true);
+const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, onCreateNew, onEditDeal }) => {
+  const { deals, loading, error } = useRealtimeBuilderDeals(dealType);
   const [searchTerm, setSearchTerm] = useState('');
   const [dealToDelete, setDealToDelete] = useState<BuilderDeal | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDeals();
-  }, [dealType]);
-
-  const fetchDeals = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('builder_deals')
-        .select('*')
-        .eq('deal_type', dealType)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      console.log('Fetched deals from database:', data);
-      setDeals(data || []);
-    } catch (error) {
-      console.error('Error fetching builder deals:', error);
-      toast.error('Failed to fetch builder deals');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDeleteDeal = async () => {
     if (!dealToDelete) return;
     
     setIsDeleting(true);
     try {
+      // First, get the project_id from the deal
+      const { data: dealData } = await supabase
+        .from('builder_deals')
+        .select('project_id')
+        .eq('id', dealToDelete.id)
+        .single();
+
       // Delete related stage assignments first
       const { data: stageData } = await supabase
         .from('builder_deal_stages')
@@ -111,9 +96,21 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
 
       if (dealError) throw dealError;
 
-      toast.success(`${dealToDelete.project_name} deleted successfully`);
-      setDealToDelete(null);
-      fetchDeals();
+      // If there's an associated project, delete it and all its tasks
+      if (dealData?.project_id) {
+        try {
+          // Import the project service to use its deleteProject function
+          const { projectService } = await import('../../services/projects');
+          await projectService.deleteProject(dealData.project_id);
+          console.log('Associated project and all its tasks deleted successfully');
+        } catch (projectError) {
+          console.warn('Error deleting associated project:', projectError);
+          // Don't throw here as the deal is already deleted
+        }
+      }
+
+        toast.success(`${dealToDelete.project_name} deleted successfully`);
+        setDealToDelete(null);
     } catch (error) {
       console.error('Error deleting builder deal:', error);
       toast.error('Failed to delete builder deal');
@@ -124,6 +121,10 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
 
   const handleViewTimeline = (dealId: string) => {
     setSelectedDealId(dealId);
+  };
+
+  const handleEditDeal = (dealId: string) => {
+    onEditDeal(dealId);
   };
 
   const filteredDeals = deals.filter(deal =>
@@ -192,7 +193,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
   console.log('Total Value:', totalValue, 'Total Commission:', totalCommission);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Button variant="secondary" onClick={onBack}>
@@ -235,7 +236,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Value</p>
               <p className="text-2xl font-bold text-gray-900">
-                ₹{(totalValue / 100000).toFixed(1)}L
+                ₹{totalValue.toFixed(1)}L
               </p>
               <p className="text-xs text-gray-500">Raw: {totalValue}</p>
             </div>
@@ -247,7 +248,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Commission</p>
               <p className="text-2xl font-bold text-gray-900">
-                ₹{(totalCommission / 100000).toFixed(1)}L
+                ₹{totalCommission.toFixed(1)}L
               </p>
             </div>
           </div>
@@ -287,6 +288,13 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
                     </div>
                   </div>
                   <div className="flex space-x-2">
+                    <button
+                      onClick={() => handleEditDeal(deal.id)}
+                      className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                      title="Edit Deal"
+                    >
+                      <Edit className="w-5 h-5" />
+                    </button>
                     <button
                       onClick={() => handleViewTimeline(deal.id)}
                       className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
@@ -365,7 +373,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
                     )}
                     {deal.commission_amount && (
                       <span className="text-sm font-medium text-green-600">
-                        ₹{(deal.commission_amount / 100000).toFixed(2)}L
+                        ₹{parseFloat(deal.commission_amount).toFixed(2)}L
                       </span>
                     )}
                   </div>
@@ -395,7 +403,7 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
         onClose={() => setDealToDelete(null)}
         onConfirm={handleDeleteDeal}
         taskName={dealToDelete?.project_name || ''}
-        taskDescription={`${dealToDelete?.deal_type} builder deal with ${dealToDelete?.client_name}`}
+        taskDescription={dealToDelete ? `This will permanently delete the ${dealToDelete.deal_type} builder deal with ${dealToDelete.client_name}, the associated project, and all tasks assigned to that project. This action cannot be undone.` : ''}
         projectName={dealToDelete?.project_name || ''}
         isLoading={isDeleting}
       />

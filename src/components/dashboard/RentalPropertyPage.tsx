@@ -10,11 +10,12 @@ interface RentalPropertyPageProps {
 }
 
 type RentalDealType = 'residential' | 'commercial' | null;
-type ViewMode = 'main' | 'list' | 'form';
+type ViewMode = 'main' | 'list' | 'form' | 'edit';
 
 const RentalPropertyPage: React.FC<RentalPropertyPageProps> = ({ onBack }) => {
   const [selectedDealType, setSelectedDealType] = useState<RentalDealType>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
+  const [editDealId, setEditDealId] = useState<string | null>(null);
 
   const handleDealTypeSelect = (type: 'residential' | 'commercial') => {
     setSelectedDealType(type);
@@ -25,9 +26,15 @@ const RentalPropertyPage: React.FC<RentalPropertyPageProps> = ({ onBack }) => {
     setViewMode('form');
   };
 
+  const handleEditDeal = (dealId: string) => {
+    setEditDealId(dealId);
+    setViewMode('edit');
+  };
+
   const handleBack = () => {
-    if (viewMode === 'form') {
+    if (viewMode === 'form' || viewMode === 'edit') {
       setViewMode('list');
+      setEditDealId(null);
     } else if (viewMode === 'list') {
       setViewMode('main');
       setSelectedDealType(null);
@@ -41,10 +48,16 @@ const RentalPropertyPage: React.FC<RentalPropertyPageProps> = ({ onBack }) => {
       <RentalDealForm
         dealType={selectedDealType}
         onBack={handleBack}
-        onSuccess={() => {
-          setViewMode('list');
-          // Success - return to list view
-        }}
+      />
+    );
+  }
+
+  if (viewMode === 'edit' && selectedDealType && editDealId) {
+    return (
+      <RentalDealForm
+        dealType={selectedDealType}
+        onBack={handleBack}
+        editDealId={editDealId}
       />
     );
   }
@@ -55,6 +68,7 @@ const RentalPropertyPage: React.FC<RentalPropertyPageProps> = ({ onBack }) => {
         dealType={selectedDealType}
         onBack={handleBack}
         onCreateNew={handleCreateNew}
+        onEditDeal={handleEditDeal}
       />
     );
   }

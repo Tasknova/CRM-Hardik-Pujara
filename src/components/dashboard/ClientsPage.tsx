@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Eye, Mail, Phone, MapPin, User } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Mail, Phone, MapPin, User, Trash2 } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
+import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
@@ -23,6 +24,8 @@ const ClientsPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -71,6 +74,41 @@ const ClientsPage: React.FC = () => {
 
   const handleView = (client: Client) => {
     setViewingClient(client);
+  };
+
+  const handleDelete = (client: Client) => {
+    setClientToDelete(client);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!clientToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', clientToDelete.id);
+
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.message.includes('foreign key constraint')) {
+          toast.error(`Cannot delete client "${clientToDelete.name}" because they have associated projects, deals, or other records. Please remove these associations first.`);
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success(`Client "${clientToDelete.name}" deleted successfully`);
+      setClientToDelete(null);
+      fetchClients(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      toast.error('Failed to delete client');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -228,6 +266,13 @@ const ClientsPage: React.FC = () => {
                       title="Edit Client"
                     >
                       <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(client)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors duration-200"
+                      title="Delete Client"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
 
@@ -431,6 +476,17 @@ const ClientsPage: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={!!clientToDelete}
+        onClose={() => setClientToDelete(null)}
+        onConfirm={handleDeleteConfirm}
+        taskName={clientToDelete?.name || ""}
+        taskDescription={clientToDelete ? `This will permanently delete the client "${clientToDelete.name}" and all associated data. This action cannot be undone.` : ""}
+        projectName="Client"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

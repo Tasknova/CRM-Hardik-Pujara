@@ -67,11 +67,177 @@ export const projectService = {
   },
 
   async deleteProject(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', id);
-    if (error) throw new Error('Failed to delete project');
+    try {
+      // First, delete all related records in the correct order
+      
+      // 1. Delete project manager assignments
+      const { error: assignmentsError } = await supabase
+        .from('project_manager_assignments')
+        .delete()
+        .eq('project_id', id);
+      
+      if (assignmentsError) {
+        console.warn('Error deleting project manager assignments:', assignmentsError);
+      }
+
+      // 2. Get task IDs for this project first
+      const { data: taskIds } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('project_id', id);
+
+      // 3. Delete rental stage assignments (must be deleted before tasks)
+      if (taskIds && taskIds.length > 0) {
+        const taskIdList = taskIds.map(t => t.id);
+        const { error: rentalStageAssignmentsError } = await supabase
+          .from('rental_stage_assignments')
+          .delete()
+          .in('task_id', taskIdList);
+        
+        if (rentalStageAssignmentsError) {
+          console.warn('Error deleting rental stage assignments:', rentalStageAssignmentsError);
+        }
+
+        // Also delete builder stage assignments
+        const { error: builderStageAssignmentsError } = await supabase
+          .from('builder_stage_assignments')
+          .delete()
+          .in('task_id', taskIdList);
+        
+        if (builderStageAssignmentsError) {
+          console.warn('Error deleting builder stage assignments:', builderStageAssignmentsError);
+        }
+
+        // Also delete task comments
+        const { error: taskCommentsError } = await supabase
+          .from('task_comments')
+          .delete()
+          .in('task_id', taskIdList);
+        
+        if (taskCommentsError) {
+          console.warn('Error deleting task comments:', taskCommentsError);
+        }
+      }
+
+      // 4. Get rental deal IDs for this project
+      const { data: rentalDealIds } = await supabase
+        .from('rental_deals')
+        .select('id')
+        .eq('project_id', id);
+
+      // 5. Delete rental deal stages (must be deleted before rental deals)
+      if (rentalDealIds && rentalDealIds.length > 0) {
+        const rentalDealIdList = rentalDealIds.map(d => d.id);
+        const { error: rentalDealStagesError } = await supabase
+          .from('rental_deal_stages')
+          .delete()
+          .in('deal_id', rentalDealIdList);
+        
+        if (rentalDealStagesError) {
+          console.warn('Error deleting rental deal stages:', rentalDealStagesError);
+        }
+
+        // Also delete rental deal team members
+        const { error: rentalDealTeamMembersError } = await supabase
+          .from('rental_deal_team_members')
+          .delete()
+          .in('deal_id', rentalDealIdList);
+        
+        if (rentalDealTeamMembersError) {
+          console.warn('Error deleting rental deal team members:', rentalDealTeamMembersError);
+        }
+      }
+
+      // 6. Get builder deal IDs for this project
+      const { data: builderDealIds } = await supabase
+        .from('builder_deals')
+        .select('id')
+        .eq('project_id', id);
+
+      // 7. Delete builder deal stages (must be deleted before builder deals)
+      if (builderDealIds && builderDealIds.length > 0) {
+        const builderDealIdList = builderDealIds.map(d => d.id);
+        const { error: builderDealStagesError } = await supabase
+          .from('builder_deal_stages')
+          .delete()
+          .in('deal_id', builderDealIdList);
+        
+        if (builderDealStagesError) {
+          console.warn('Error deleting builder deal stages:', builderDealStagesError);
+        }
+
+        // Also delete builder deal team members
+        const { error: builderDealTeamMembersError } = await supabase
+          .from('builder_deal_team_members')
+          .delete()
+          .in('deal_id', builderDealIdList);
+        
+        if (builderDealTeamMembersError) {
+          console.warn('Error deleting builder deal team members:', builderDealTeamMembersError);
+        }
+      }
+
+      // 8. Delete tasks
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('project_id', id);
+      
+      if (tasksError) {
+        console.warn('Error deleting tasks:', tasksError);
+      }
+
+      // 9. Delete daily tasks
+      const { error: dailyTasksError } = await supabase
+        .from('daily_tasks')
+        .delete()
+        .eq('project_id', id);
+      
+      if (dailyTasksError) {
+        console.warn('Error deleting daily tasks:', dailyTasksError);
+      }
+
+      // 10. Delete deleted tasks
+      const { error: deletedTasksError } = await supabase
+        .from('deleted_tasks')
+        .delete()
+        .eq('project_id', id);
+      
+      if (deletedTasksError) {
+        console.warn('Error deleting deleted tasks:', deletedTasksError);
+      }
+
+      // 11. Delete rental deals
+      const { error: rentalDealsError } = await supabase
+        .from('rental_deals')
+        .delete()
+        .eq('project_id', id);
+      
+      if (rentalDealsError) {
+        console.warn('Error deleting rental deals:', rentalDealsError);
+      }
+
+      // 12. Delete builder deals
+      const { error: builderDealsError } = await supabase
+        .from('builder_deals')
+        .delete()
+        .eq('project_id', id);
+      
+      if (builderDealsError) {
+        console.warn('Error deleting builder deals:', builderDealsError);
+      }
+
+      // 13. Finally delete the project
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw new Error('Failed to delete project');
+    } catch (error) {
+      console.error('Error in deleteProject:', error);
+      throw new Error('Failed to delete project');
+    }
   },
 
   async markProjectAsComplete(id: string): Promise<Project> {

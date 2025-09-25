@@ -5,7 +5,7 @@ import BuilderDealForm from './BuilderDealForm';
 import BuilderDealsList from './BuilderDealsList';
 
 type DealType = 'residential' | 'commercial';
-type ViewMode = 'main' | 'list' | 'form';
+type ViewMode = 'main' | 'list' | 'form' | 'edit';
 
 interface BuilderPropertyPageProps {
   onBack: () => void;
@@ -14,6 +14,7 @@ interface BuilderPropertyPageProps {
 const BuilderPropertyPage: React.FC<BuilderPropertyPageProps> = ({ onBack }) => {
   const [selectedDealType, setSelectedDealType] = useState<DealType | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
+  const [editDealId, setEditDealId] = useState<string | null>(null);
 
   const handleDealTypeSelect = (type: DealType) => {
     setSelectedDealType(type);
@@ -24,9 +25,15 @@ const BuilderPropertyPage: React.FC<BuilderPropertyPageProps> = ({ onBack }) => 
     setViewMode('form');
   };
 
+  const handleEditDeal = (dealId: string) => {
+    setEditDealId(dealId);
+    setViewMode('edit');
+  };
+
   const handleBack = () => {
-    if (viewMode === 'form') {
+    if (viewMode === 'form' || viewMode === 'edit') {
       setViewMode('list');
+      setEditDealId(null);
     } else if (viewMode === 'list') {
       setViewMode('main');
       setSelectedDealType(null);
@@ -47,12 +54,26 @@ const BuilderPropertyPage: React.FC<BuilderPropertyPageProps> = ({ onBack }) => 
     );
   }
 
+  if (viewMode === 'edit' && selectedDealType && editDealId) {
+    return (
+      <BuilderDealForm
+        dealType={selectedDealType}
+        onBack={handleBack}
+        onSuccess={() => {
+          setViewMode('list');
+        }}
+        editDealId={editDealId}
+      />
+    );
+  }
+
   if (viewMode === 'list' && selectedDealType) {
     return (
       <BuilderDealsList
         dealType={selectedDealType}
         onBack={handleBack}
         onCreateNew={handleCreateNew}
+        onEditDeal={handleEditDeal}
       />
     );
   }

@@ -271,13 +271,15 @@ export const authService = {
       const { data: projectManagers, error } = await supabase
         .from('project_managers')
         .select('*')
-        .eq('is_active', true)
         .order('created_at', { ascending: false });
       if (error) {
+        console.error('Error fetching project managers:', error);
         throw new Error('Failed to fetch project managers');
       }
+      console.log('Fetched project managers:', projectManagers);
       return projectManagers || [];
     } catch (error) {
+      console.error('Error in getProjectManagers:', error);
       throw new Error('Failed to fetch project managers');
     }
   },
@@ -332,9 +334,7 @@ export const authService = {
 
   async deleteProjectManager(id: string): Promise<void> {
     const { error } = await supabase
-      .from('project_managers')
-      .delete()
-      .eq('id', id);
+      .rpc('delete_project_manager_cascade', { pm_id: id });
     if (error) throw new Error('Failed to delete project manager');
   }
 };
