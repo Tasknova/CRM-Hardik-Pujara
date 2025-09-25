@@ -162,7 +162,15 @@ const BuildersPage: React.FC = () => {
         .delete()
         .eq('id', builderToDelete.id);
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.message.includes('foreign key constraint') || error.message.includes('violates foreign key constraint')) {
+          toast.error(`Cannot delete builder "${builderToDelete.name}" because they have associated builder deals. Please delete the associated deals first.`);
+        } else {
+          throw error;
+        }
+        return;
+      }
       
       toast.success(`${builderToDelete.name} deleted successfully`);
       setBuilderToDelete(null);

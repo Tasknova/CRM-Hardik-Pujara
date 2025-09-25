@@ -163,7 +163,15 @@ const LoanProvidersPage: React.FC = () => {
         .delete()
         .eq('id', providerToDelete.id);
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.message.includes('foreign key constraint') || error.message.includes('violates foreign key constraint')) {
+          toast.error(`Cannot delete loan provider "${providerToDelete.provider_name}" because they have associated builder deals. Please delete the associated deals first.`);
+        } else {
+          throw error;
+        }
+        return;
+      }
       toast.success('Loan provider deleted successfully');
       setProviderToDelete(null);
       fetchProviders();

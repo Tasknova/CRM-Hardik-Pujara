@@ -74,8 +74,13 @@ const MembersList: React.FC = () => {
       setDeleteConfirm(false);
       setSelectedProjectManager(null);
       loadMembers();
-    } catch (err) {
-      setError('Failed to delete project manager');
+    } catch (err: any) {
+      console.error('Error deleting project manager:', err);
+      if (err.message && (err.message.includes('foreign key constraint') || err.message.includes('violates foreign key constraint'))) {
+        setError(`Cannot delete project manager "${selectedProjectManager.name}" because they have associated projects, tasks, or deals. Please remove these associations first.`);
+      } else {
+        setError('Failed to delete project manager');
+      }
     }
   };
 
@@ -126,8 +131,13 @@ const MembersList: React.FC = () => {
       setDeleteConfirm(false);
       setSelectedMember(null);
       loadMembers();
-    } catch (err) {
-      setError('Failed to delete member');
+    } catch (err: any) {
+      console.error('Error deleting member:', err);
+      if (err.message && (err.message.includes('foreign key constraint') || err.message.includes('violates foreign key constraint'))) {
+        setError(`Cannot delete member "${selectedMember.name}" because they have associated tasks, projects, or deals. Please remove these associations first.`);
+      } else {
+        setError('Failed to delete member');
+      }
     }
   };
 
