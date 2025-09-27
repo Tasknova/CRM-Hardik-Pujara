@@ -34,7 +34,8 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
         query = query.eq('status', filters.status);
       }
       if (filters.member) {
-        query = query.eq('user_id', filters.member);
+        // Check both primary user_id and assigned_user_ids for multi-assignment
+        query = query.or(`user_id.eq.${filters.member},assigned_user_ids.cs.["${filters.member}"]`);
       }
       if (filters.date) {
         query = query.eq('task_date', filters.date);
@@ -51,7 +52,8 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
 
       // If not admin or project manager, only show user's own tasks
       if (user.role !== 'admin' && user.role !== 'project_manager') {
-        query = query.eq('user_id', user.id);
+        // Check both primary user_id and assigned_user_ids for multi-assignment
+        query = query.or(`user_id.eq.${user.id},assigned_user_ids.cs.["${user.id}"]`);
       }
 
       const { data, error } = await query;
@@ -80,25 +82,27 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
     if (!tasks.length) return [];
     
     try {
-      // Get unique user IDs from tasks
-      const userIds = [...new Set(tasks.map(task => task.user_id))];
+      // Get unique user IDs from tasks (both primary user_id and assigned_user_ids)
+      const primaryUserIds = [...new Set(tasks.map(task => task.user_id).filter(id => id))];
+      const assignedUserIds = [...new Set(tasks.flatMap(task => task.assigned_user_ids || []))];
+      const allUserIds = [...new Set([...primaryUserIds, ...assignedUserIds])];
       
-      // Fetch members, admins, and project managers
+      // Fetch members, admins, and project managers for all user IDs
       const [membersData, adminsData, projectManagersData] = await Promise.all([
         supabase
           .from('members')
           .select('id, name, email, avatar_url')
-          .in('id', userIds)
+          .in('id', allUserIds)
           .eq('is_active', true),
         supabase
           .from('admins')
           .select('id, name, email, avatar_url')
-          .in('id', userIds)
+          .in('id', allUserIds)
           .eq('is_active', true),
         supabase
           .from('project_managers')
           .select('id, name, email, avatar_url')
-          .in('id', userIds)
+          .in('id', allUserIds)
           .eq('is_active', true)
       ]);
 
@@ -123,17 +127,41 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
         });
       }
 
-      // Attach user data to tasks
-      return tasks.map(task => ({
-        ...task,
-        user: userMap.get(task.user_id) || null
-      }));
+      // Attach user data to tasks and create assignments from assigned_user_ids JSONB
+      return tasks.map(task => {
+        let assignments = [];
+        
+        // Create assignments from assigned_user_ids JSONB column
+        if (task.assigned_user_ids && Array.isArray(task.assigned_user_ids)) {
+          assignments = task.assigned_user_ids
+            .filter((userId: string) => userId) // Only filter out null/undefined, not specific UUIDs
+            .map((userId: string) => {
+              const user = userMap.get(userId);
+              return {
+                id: `${task.id}-${userId}`, // Generate a unique ID
+                task_id: task.id,
+                user_id: userId,
+                assigned_at: task.created_at, // Use task creation time
+                assigned_by: task.created_by,
+                member_name: user?.name || 'Unknown',
+                member_email: user?.email || 'Unknown'
+              };
+            });
+        }
+        
+        return {
+          ...task,
+          user: task.user_id ? userMap.get(task.user_id) || null : null,
+          assignments: assignments
+        };
+      });
     } catch (error) {
       console.error('Error fetching user data for tasks:', error);
       // Return tasks without user data if there's an error
       return tasks.map(task => ({
         ...task,
-        user: null
+        user: null,
+        assignments: []
       }));
     }
   };
@@ -478,7 +506,12 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
 
       if (error) {
         console.error('Error deleting daily task:', error);
-        setError(error.message || 'Error deleting daily task');
+        // Handle foreign key constraint violations
+        if (error.code === '23503') {
+          setError('Cannot delete task: This task is referenced by other records. Please remove all references first.');
+        } else {
+          setError(error.message || 'Error deleting daily task');
+        }
         return;
       }
 
@@ -499,10 +532,11 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
     });
   }, [updateTask]);
 
-  const markSkipped = useCallback(async (id: string) => {
+  const markSkipped = useCallback(async (id: string, skipReason?: string) => {
     return updateTask(id, {
       status: 'skipped',
-      completed_at: null
+      completed_at: null,
+      skip_reason: skipReason || null
     });
   }, [updateTask]);
 

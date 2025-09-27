@@ -6,6 +6,7 @@ import FileUpload from '../ui/FileUpload';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RentalDealTimelineProps {
   dealId: string;
@@ -39,6 +40,13 @@ interface StageAssignment {
   priority: string;
   attachments: any[];
   assigned_at: string;
+  // Task details
+  task_name?: string;
+  task_status?: string;
+  task_priority?: string;
+  task_due_date?: string;
+  task_description?: string;
+  task_progress?: number;
 }
 
 interface DealInfo {
@@ -61,6 +69,7 @@ interface TeamMember {
 }
 
 const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealType, onBack }) => {
+  const { user } = useAuth();
   const [dealInfo, setDealInfo] = useState<DealInfo | null>(null);
   const [stages, setStages] = useState<DealStage[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -82,6 +91,35 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
     fetchDealData();
     fetchTeamMembers();
   }, [dealId]);
+
+  // Real-time subscription for task status changes
+  useEffect(() => {
+    if (!dealInfo?.project_id) return;
+
+    const channel = supabase
+      .channel('task-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tasks',
+          filter: `project_id=eq.${dealInfo.project_id}`
+        },
+        (payload) => {
+          console.log('Task status changed:', payload);
+          // Check all stages for completion when any task status changes
+          stages.forEach(stage => {
+            checkAndUpdateStageCompletion(stage.id);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dealInfo?.project_id, stages]);
 
   const fetchDealData = async () => {
     try {
@@ -137,7 +175,16 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
             priority,
             attachments,
             assigned_at,
-            members!rental_stage_assignments_member_id_fkey(name)
+            members!rental_stage_assignments_member_id_fkey(name),
+            tasks!rental_stage_assignments_task_id_fkey(
+              id,
+              task_name,
+              status,
+              priority,
+              due_date,
+              description,
+              progress
+            )
           `)
           .in('stage_id', stagesData.map(s => s.id));
 
@@ -159,7 +206,14 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
               task_id: assignment.task_id,
               priority: assignment.priority,
               attachments: assignment.attachments || [],
-              assigned_at: assignment.assigned_at
+              assigned_at: assignment.assigned_at,
+              // Task details
+              task_name: assignment.tasks?.task_name,
+              task_status: assignment.tasks?.status,
+              task_priority: assignment.tasks?.priority,
+              task_due_date: assignment.tasks?.due_date,
+              task_description: assignment.tasks?.description,
+              task_progress: assignment.tasks?.progress
             });
           });
           
@@ -250,6 +304,51 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
     }
   };
 
+  // Function to check and update stage completion status
+  const checkAndUpdateStageCompletion = async (stageId: string) => {
+    try {
+      // Get all tasks for this stage
+      const { data: stageTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('id, status')
+        .eq('project_id', dealInfo?.project_id)
+        .contains('tags', [`rental-deal-${stageId}`]);
+
+      if (tasksError) {
+        console.error('Error fetching stage tasks:', tasksError);
+        return;
+      }
+
+      if (!stageTasks || stageTasks.length === 0) {
+        return; // No tasks for this stage
+      }
+
+      // Check if all tasks are completed
+      const allCompleted = stageTasks.every(task => task.status === 'completed');
+      
+      if (allCompleted) {
+        // Update stage status to completed
+        const { error: stageError } = await supabase
+          .from('rental_deal_stages')
+          .update({
+            status: 'completed',
+            actual_date: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', stageId);
+
+        if (stageError) {
+          console.error('Error updating stage status:', stageError);
+        } else {
+          toast.success('Stage completed! All tasks are finished.');
+          fetchDealData(); // Refresh data
+        }
+      }
+    } catch (error) {
+      console.error('Error checking stage completion:', error);
+    }
+  };
+
   const handleSaveStage = async (stageId: string) => {
     try {
       // Update the stage
@@ -286,18 +385,20 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
         if (removeError) throw removeError;
       }
 
-      // Add new assignments and create tasks
-      for (const memberId of membersToAdd) {
-        const member = dealTeamMembers.find(m => m.id === memberId);
+      // Create a single task for all selected members
+      if (membersToAdd.length > 0) {
         const stage = stages.find(s => s.id === stageId);
         
-        if (member && stage && dealInfo) {
-          // Create task first
+        if (stage && dealInfo) {
+          console.log('Creating task for members:', membersToAdd);
+
+          // Create task with all selected members
           const { data: taskData, error: taskError } = await supabase
             .from('tasks')
             .insert([{
-              user_id: memberId,
-              created_by: memberId, // You might want to get current user ID here
+              user_id: membersToAdd[0], // Use first member as primary assignee (required by trigger)
+              assigned_user_ids: membersToAdd, // All selected members as JSON array
+              created_by: membersToAdd[0], // Use first member as creator (required by trigger)
               task_name: `${dealInfo.project_name} - ${stage.stage_name}`,
               description: `Complete ${stage.stage_name} for ${dealInfo.deal_type} rental deal: ${dealInfo.project_name}.\n\nClient: ${dealInfo.client_name}\nProperty: ${dealInfo.property_address}\n\nStage Details: ${stage.stage_name}`,
               due_date: editForm.estimated_date || null,
@@ -313,24 +414,27 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
 
           if (taskError) {
             console.error('Error creating task:', taskError);
-            toast.warn(`Failed to create task for ${member.name}`);
-            continue;
-          }
-
-          // Create stage assignment
-          const { error: assignmentError } = await supabase
-            .from('rental_stage_assignments')
-            .insert([{
+            toast.error(`Failed to create task: ${taskError.message}`);
+          } else {
+            console.log('Task created successfully:', taskData);
+            
+            // Create ONE stage assignment for the stage (not per member)
+            const assignment = {
               stage_id: stageId,
-              member_id: memberId,
+              member_id: membersToAdd[0], // Use first member as primary
               task_id: taskData.id,
               priority: editForm.priority,
               attachments: editForm.attachments
-            }]);
+            };
 
-          if (assignmentError) {
-            console.error('Error creating assignment:', assignmentError);
-            toast.warn(`Failed to create assignment for ${member.name}`);
+            const { error: assignmentError } = await supabase
+              .from('rental_stage_assignments')
+              .insert([assignment]);
+
+            if (assignmentError) {
+              console.error('Error creating assignments:', assignmentError);
+              toast.error('Failed to create stage assignments');
+            }
           }
         }
       }
@@ -739,6 +843,69 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                                   )}
                                 </span>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Task Details */}
+                        {stageAssignments[stage.id] && stageAssignments[stage.id].some(a => a.task_id) && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="text-xs font-medium text-gray-700 mb-2">Associated Tasks:</div>
+                            <div className="space-y-2">
+                              {stageAssignments[stage.id]
+                                .filter(assignment => assignment.task_id)
+                                .map(assignment => (
+                                  <div key={assignment.task_id} className="p-3 bg-white rounded border">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className={`w-2 h-2 rounded-full ${
+                                          assignment.task_status === 'completed' ? 'bg-green-500' :
+                                          assignment.task_status === 'in_progress' ? 'bg-blue-500' :
+                                          'bg-gray-400'
+                                        }`}></div>
+                                        <span className="text-sm font-medium text-gray-900">
+                                          {assignment.task_name || `Task for ${assignment.member_name}`}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <span className={`px-2 py-1 text-xs rounded-full ${
+                                          assignment.task_status === 'completed' ? 'bg-green-100 text-green-800' :
+                                          assignment.task_status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                          'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          {assignment.task_status?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                                      <div className="flex items-center space-x-1">
+                                        <span className="font-medium">Priority:</span>
+                                        <span className={`px-1 py-0.5 rounded text-xs ${
+                                          assignment.task_priority === 'high' ? 'bg-red-100 text-red-800' :
+                                          assignment.task_priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                          'bg-green-100 text-green-800'
+                                        }`}>
+                                          {assignment.task_priority?.toUpperCase() || 'LOW'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center space-x-1">
+                                        <span className="font-medium">Due:</span>
+                                        <span>{assignment.task_due_date ? 
+                                          new Date(assignment.task_due_date).toLocaleDateString() : 
+                                          'No due date'
+                                        }</span>
+                                      </div>
+                                    </div>
+                                    
+                                    {assignment.task_description && (
+                                      <div className="mt-2 text-xs text-gray-600">
+                                        <span className="font-medium">Description:</span>
+                                        <p className="mt-1 line-clamp-2">{assignment.task_description}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                             </div>
                           </div>
                         )}

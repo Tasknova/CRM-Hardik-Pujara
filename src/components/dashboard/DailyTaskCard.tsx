@@ -6,11 +6,11 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
-import { Eye, Calendar, User, AlertCircle, CheckCircle2, File, Link, Trash2 } from 'lucide-react';
+import { Eye, Calendar, User, AlertCircle, CheckCircle2, File, Link, Trash2, Edit } from 'lucide-react';
 
 interface DailyTaskCardProps {
   task: DailyTask;
-  onStatusChange: (id: string, status: 'pending' | 'completed' | 'skipped') => void;
+  onStatusChange: (id: string, status: 'pending' | 'completed' | 'skipped', skipReason?: string) => void;
   onEdit?: (task: DailyTask) => void;
   onDelete?: (id: string) => void;
   isAdmin?: boolean;
@@ -51,6 +51,8 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
   isAdmin = false
 }) => {
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isSkipModalOpen, setIsSkipModalOpen] = useState(false);
+  const [skipReason, setSkipReason] = useState('');
   const { 
     isOpen: isDeleteModalOpen, 
     task: taskToDelete, 
@@ -61,7 +63,24 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
   } = useDeleteConfirmation();
 
   const handleStatusChange = (newStatus: 'pending' | 'completed' | 'skipped') => {
-    onStatusChange(task.id, newStatus);
+    if (newStatus === 'skipped') {
+      setIsSkipModalOpen(true);
+    } else {
+      onStatusChange(task.id, newStatus);
+    }
+  };
+
+  const handleSkipConfirm = () => {
+    if (skipReason.trim()) {
+      onStatusChange(task.id, 'skipped', skipReason.trim());
+      setIsSkipModalOpen(false);
+      setSkipReason('');
+    }
+  };
+
+  const handleSkipCancel = () => {
+    setIsSkipModalOpen(false);
+    setSkipReason('');
   };
 
   const getPriorityVariant = (priority: DailyTask['priority']) => {
@@ -143,6 +162,30 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
               className="text-gray-500 hover:text-gray-700 focus:ring-2 focus:ring-gray-200 rounded-full"
               title="View task details"
             />
+            
+            {/* Edit button */}
+            {isAdmin && onEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Edit}
+                onClick={() => onEdit(task)}
+                className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 focus:ring-2 focus:ring-blue-200 rounded-full"
+                title="Edit task"
+              />
+            )}
+            
+            {/* Delete button */}
+            {isAdmin && onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Trash2}
+                onClick={() => showDeleteConfirmation(task, 'daily_task')}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 focus:ring-2 focus:ring-red-200 rounded-full"
+                title="Delete task"
+              />
+            )}
           </div>
         </div>
 
@@ -160,11 +203,34 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
               {task.description}
             </p>
           )}
+          
+          {/* Skip reason display */}
+          {task.status === 'skipped' && task.skip_reason && (
+            <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700">
+                <span className="font-medium">Skip reason:</span> {task.skip_reason}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
           <div>
-            <span className="font-medium">Assigned to:</span> {task.user?.name || 'Unknown'}
+            <span className="font-medium">Assigned to:</span> 
+            {task.assignments && task.assignments.length > 0 ? (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {task.assignments.map((assignment, index) => (
+                  <span
+                    key={assignment.id}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                  >
+                    {assignment.member_name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="ml-1">{task.user?.name || 'Unknown'}</span>
+            )}
           </div>
           <div>
             <span className="font-medium">Date:</span> {new Date(task.task_date).toLocaleDateString()}
@@ -258,30 +324,6 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
             )}
           </div>
 
-          {isAdmin && (
-            <div className="flex space-x-2">
-              {onEdit && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onEdit(task)}
-                  className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                >
-                  Edit
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => showDeleteConfirmation(task, 'daily', () => onDelete && onDelete(task.id))}
-                  className="border-red-300 text-red-600 hover:bg-red-50"
-                >
-                  Delete
-                </Button>
-              )}
-            </div>
-          )}
         </div>
 
         {task.completed_at && (
@@ -463,14 +505,6 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
               <Button variant="outline" onClick={() => setIsViewOpen(false)}>
                 Close
               </Button>
-              {isAdmin && onEdit && (
-                <Button onClick={() => {
-                  setIsViewOpen(false);
-                  onEdit(task);
-                }}>
-                  Edit Task
-                </Button>
-              )}
             </div>
           </div>
         </Modal>
@@ -489,6 +523,45 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
         dueDate={taskToDelete?.task_date}
         taskType={taskType}
       />
+
+      {/* Skip Reason Modal */}
+      <Modal isOpen={isSkipModalOpen} onClose={handleSkipCancel} title="Skip Task">
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-gray-600 mb-4">
+              Please provide a reason for skipping this task:
+            </p>
+            <p className="font-medium text-gray-900 mb-2">{task.task_name}</p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Reason for skipping *
+            </label>
+            <textarea
+              value={skipReason}
+              onChange={(e) => setSkipReason(e.target.value)}
+              placeholder="Enter reason for skipping this task..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+              required
+            />
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={handleSkipCancel}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSkipConfirm}
+              disabled={!skipReason.trim()}
+              className="bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Skip Task
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

@@ -59,6 +59,7 @@ interface DealFormData {
   additional_notes: string;
   client_id?: string;
   owner_id?: string;
+  project_manager_id?: string;
 }
 
 const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editDealId }) => {
@@ -80,12 +81,14 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     start_date: '',
     end_date: '',
     team_members: [],
-    additional_notes: ''
+    additional_notes: '',
+    project_manager_id: ''
   });
   
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
+  const [projectManagers, setProjectManagers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [ownersLoading, setOwnersLoading] = useState(false);
@@ -101,6 +104,7 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     fetchTeamMembers();
     fetchClients();
     fetchOwners();
+    fetchProjectManagers();
   }, []);
 
   // Load deal data for editing
@@ -169,6 +173,31 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     }
   };
 
+  const fetchProjectManagers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('project_managers')
+        .select('id, name, email, phone')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      
+      // Transform the data to match our expected interface
+      const transformedData = (data || []).map(pm => ({
+        id: pm.id,
+        name: pm.name,
+        email: pm.email,
+        role: 'Project Manager'
+      }));
+      
+      setProjectManagers(transformedData);
+    } catch (error) {
+      console.error('Error fetching project managers:', error);
+      toast.error('Failed to load project managers');
+    }
+  };
+
   const loadDealForEdit = async () => {
     if (!editDealId) return;
     
@@ -202,7 +231,8 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
           end_date: data.end_date || '',
           team_members: data.team_members || [],
           additional_notes: data.additional_notes || '',
-          owner_id: data.owner_id
+          owner_id: data.owner_id,
+          project_manager_id: data.project_manager_id || ''
         });
       }
     } catch (error) {
@@ -361,7 +391,8 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
             status: 'active',
             current_stage: 1,
             client_id: formData.client_id,
-            owner_id: formData.owner_id
+            owner_id: formData.owner_id,
+            project_manager_id: formData.project_manager_id || null
           })
           .eq('id', editDealId)
           .select()
@@ -436,7 +467,8 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
             current_stage: 1,
             client_id: formData.client_id,
             owner_id: formData.owner_id,
-            project_id: projectData.id
+            project_id: projectData.id,
+            project_manager_id: formData.project_manager_id || null
           }])
           .select()
           .single();
@@ -585,6 +617,22 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Project Manager
+                </label>
+                <select
+                  value={formData.project_manager_id}
+                  onChange={(e) => handleInputChange('project_manager_id', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select Project Manager</option>
+                  {projectManagers.map(pm => (
+                    <option key={pm.id} value={pm.id}>{pm.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="mt-4">

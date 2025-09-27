@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Eye, Calendar, MapPin, User, DollarSign, Search, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, Plus, Eye, Calendar, MapPin, User, DollarSign, Search, Trash2, Edit, CheckCircle } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
@@ -42,6 +42,26 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
 
   const handleEditDeal = (dealId: string) => {
     onEditDeal(dealId);
+  };
+
+  const handleMarkComplete = async (dealId: string) => {
+    try {
+      const { error } = await supabase
+        .from('rental_deals')
+        .update({ status: 'completed' })
+        .eq('id', dealId);
+
+      if (error) {
+        console.error('Error marking deal as complete:', error);
+        toast.error('Failed to mark deal as complete');
+        return;
+      }
+
+      toast.success('Deal marked as complete successfully');
+    } catch (error) {
+      console.error('Error marking deal as complete:', error);
+      toast.error('Failed to mark deal as complete');
+    }
   };
 
   const handleBackFromTimeline = () => {
@@ -291,6 +311,15 @@ const RentalDealsList: React.FC<RentalDealsListProps> = ({ dealType, onBack, onC
 
                   {/* Actions */}
                   <div className="flex justify-end space-x-2 pt-2">
+                    {deal.status === 'active' && (
+                      <button
+                        onClick={() => handleMarkComplete(deal.id)}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors duration-200"
+                        title="Mark as Complete"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleEditDeal(deal.id)}
                       className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors duration-200"

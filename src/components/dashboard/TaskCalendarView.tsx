@@ -254,9 +254,19 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                       {showUser && (
                         <div className="flex items-center space-x-1 text-gray-600 mt-1">
                           <User className="w-3 h-3" />
-                          <span className="truncate text-xs">
-                            {getUserName(task.user_id)}
-                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {task.assignments && task.assignments.length > 0 ? (
+                              task.assignments.map((assignment, index) => (
+                                <span key={assignment.id} className="text-xs bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
+                                  {assignment.member_name || 'Unknown'}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs bg-gray-100 text-gray-500 px-1 py-0.5 rounded">
+                                Unassigned
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                       
@@ -343,7 +353,19 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
               {showUser && (
                 <div>
                   <p className="font-medium text-gray-700">Assigned To</p>
-                  <p className="text-gray-900">{getUserName(selectedTask.user_id)}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedTask.assignments && selectedTask.assignments.length > 0 ? (
+                      selectedTask.assignments.map((assignment, index) => (
+                        <span key={assignment.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          {assignment.member_name || 'Unknown'}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">
+                        Unassigned
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
               <div>

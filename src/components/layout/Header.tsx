@@ -8,9 +8,10 @@ interface HeaderProps {
   unreadNotifications: number;
   onNotificationsClick: () => void;
   activeTab: string;
+  onProfileClick?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ unreadNotifications, onNotificationsClick, activeTab }) => {
+const Header: React.FC<HeaderProps> = ({ unreadNotifications, onNotificationsClick, activeTab, onProfileClick }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,13 +93,16 @@ const Header: React.FC<HeaderProps> = ({ unreadNotifications, onNotificationsCli
               )}
             </button>
             
-            <div className="flex items-center space-x-2">
+            <button 
+              onClick={onProfileClick}
+              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            >
               <User className="w-4 h-4 text-gray-500" />
               <span className="text-sm font-medium text-gray-700">{user?.name}</span>
               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
                 {user?.role}
               </span>
-            </div>
+            </button>
             
             <div className="flex items-center space-x-2">
               <Button

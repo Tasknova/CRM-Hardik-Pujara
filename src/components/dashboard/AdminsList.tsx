@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, Plus, Trash2, Edit2 } from 'lucide-react';
+import { User, Mail, Phone, Plus, Trash2, Edit2, Eye, EyeOff } from 'lucide-react';
 import { Admin } from '../../types';
 import { authService } from '../../services/auth';
 import Button from '../ui/Button';
@@ -21,6 +21,10 @@ const AdminForm: React.FC<{
     phone: '',
   });
   const [adminPassword, setAdminPassword] = useState(''); // NEW
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -36,6 +40,10 @@ const AdminForm: React.FC<{
       setFormData({ name: '', email: '', password: '', phone: '' });
     }
     setAdminPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setShowAdminPassword(false);
   }, [initialData, isOpen]);
 
   const isEdit = !!initialData;
@@ -74,6 +82,11 @@ const AdminForm: React.FC<{
           setLoading(false);
           return;
         }
+        if (formData.password !== confirmPassword) {
+          setError('Passwords do not match');
+          setLoading(false);
+          return;
+        }
         // Require admin password authentication
         if (!adminPassword) {
           setError('Please enter your password to confirm.');
@@ -81,8 +94,9 @@ const AdminForm: React.FC<{
           return;
         }
         const ok = await authService.verifyAdminPassword(user.id, adminPassword);
+        
         if (!ok) {
-          setError('Your password is incorrect.');
+          setError('Your password is incorrect. Please check your password and try again.');
           setLoading(false);
           return;
         }
@@ -152,16 +166,25 @@ const AdminForm: React.FC<{
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Password {isEdit ? '(leave blank to keep unchanged)' : '*'}
             </label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required={!isEdit}
-              minLength={6}
-              placeholder={isEdit ? 'Leave blank to keep current password' : ''}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required={!isEdit}
+                minLength={6}
+                placeholder={isEdit ? 'Leave blank to keep current password' : ''}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -176,20 +199,57 @@ const AdminForm: React.FC<{
             />
           </div>
         </div>
+        {/* Confirm Password field - only show for new admins */}
+        {!isEdit && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirm Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                name="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+                minLength={6}
+                placeholder="Confirm your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
         {/* Password authentication before adding admin */}
         {!isEdit && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Your Password (required to add a new admin)
             </label>
-            <input
-              type="password"
-              name="adminPassword"
-              value={adminPassword}
-              onChange={e => setAdminPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showAdminPassword ? "text" : "password"}
+                name="adminPassword"
+                value={adminPassword}
+                onChange={e => setAdminPassword(e.target.value)}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+                placeholder="Enter your admin password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAdminPassword(!showAdminPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         )}
         <div className="flex justify-end space-x-3 pt-4">

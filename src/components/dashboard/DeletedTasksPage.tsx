@@ -86,11 +86,12 @@ const DeletedTasksPage: React.FC<DeletedTasksPageProps> = ({ onBack }) => {
       const tasks = await deletedTasksService.getDeletedTasks({ limit: 100 });
       setDeletedTasks(tasks);
       
-      // Fetch user names for all unique user IDs
+      // Fetch user names for all unique user IDs (including assigned_user_ids)
       const userIds = [...new Set([
         ...tasks.map(task => task.user_id),
         ...tasks.map(task => task.created_by),
-        ...tasks.map(task => task.deleted_by)
+        ...tasks.map(task => task.deleted_by),
+        ...tasks.flatMap(task => task.assigned_user_ids || [])
       ])];
       
       const names = await fetchUserNames(userIds);
@@ -324,7 +325,20 @@ const DeletedTasksPage: React.FC<DeletedTasksPageProps> = ({ onBack }) => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
                           <div className="font-medium">Assigned To:</div>
-                          <div className="text-gray-500">{userNames[task.user_id] || task.user_id}</div>
+                          {task.assigned_user_ids && task.assigned_user_ids.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {task.assigned_user_ids.map((userId, index) => (
+                                <span
+                                  key={userId}
+                                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                >
+                                  {userNames[userId] || userId}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-gray-500">{userNames[task.user_id] || task.user_id}</div>
+                          )}
                         </div>
                         <div className="text-sm text-gray-900 mt-1">
                           <div className="font-medium">Created By:</div>

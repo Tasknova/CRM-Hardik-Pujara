@@ -35,6 +35,7 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
     description: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     user_id: isAdmin ? (members.length > 0 ? members[0].id : currentUserId) : currentUserId,
+    assigned_user_ids: [] as string[],
     tags: [] as string[],
     task_date: new Date().toISOString().split('T')[0],
     project_id: '' as string
@@ -61,6 +62,7 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
         description: task.description || '',
         priority: task.priority,
         user_id: task.user_id,
+        assigned_user_ids: task.assigned_user_ids || [],
         tags: task.tags || [],
         task_date: task.task_date,
         project_id: task.project_id || ''
@@ -72,6 +74,7 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
         description: '',
         priority: 'medium',
         user_id: isAdmin ? (members.length > 0 ? members[0].id : currentUserId) : currentUserId,
+        assigned_user_ids: [],
         tags: [],
         task_date: new Date().toISOString().split('T')[0],
         project_id: ''
@@ -88,6 +91,7 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
         description: '',
         priority: 'medium',
         user_id: isAdmin ? (members.length > 0 ? members[0].id : currentUserId) : currentUserId,
+        assigned_user_ids: [],
         tags: [],
         task_date: new Date().toISOString().split('T')[0],
         project_id: ''
@@ -127,9 +131,9 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
     e.preventDefault();
     if (!formData.task_name.trim()) return;
     
-    // Ensure we have a valid user_id
-    if (!formData.user_id || formData.user_id === '') {
-      console.error('No valid user selected');
+    // Ensure we have at least one user assigned
+    if (formData.assigned_user_ids.length === 0) {
+      console.error('No users assigned to task');
       return;
     }
 
@@ -303,7 +307,7 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
         {isAdmin && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Assign to Member or Admin
+              Assign to Members/Admins
             </label>
             {adminsLoading ? (
               <div className="text-sm text-gray-500">Loading members and admins...</div>
@@ -312,41 +316,114 @@ export const DailyTaskForm: React.FC<DailyTaskFormProps> = ({
             ) : (members.length === 0 && admins.length === 0) ? (
               <div className="text-sm text-gray-500">No members or admins found.</div>
             ) : (
-              <select
-                value={formData.user_id}
-                onChange={(e) => setFormData(prev => ({ ...prev, user_id: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select Member or Admin</option>
+              <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
                 {members.length > 0 && (
-                  <optgroup label="Members">
-                    {members.map((member) => (
-                      <option key={member.id} value={member.id}>
-                        {member.name} ({member.email})
-                      </option>
-                    ))}
-                  </optgroup>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Members</h4>
+                    <div className="space-y-2">
+                      {members.map(member => (
+                        <label key={member.id} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.assigned_user_ids.includes(member.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, member.id]
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== member.id)
+                                }));
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900">{member.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">({member.email})</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 )}
+                
                 {admins.length > 0 && (
-                  <optgroup label="Admins">
-                    {admins.map((admin) => (
-                      <option key={admin.id} value={admin.id}>
-                        {admin.name} ({admin.email}) - Admin
-                      </option>
-                    ))}
-                  </optgroup>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Admins</h4>
+                    <div className="space-y-2">
+                      {admins.map(admin => (
+                        <label key={admin.id} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.assigned_user_ids.includes(admin.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, admin.id]
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== admin.id)
+                                }));
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900">{admin.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">({admin.email}) - Admin</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 )}
+                
                 {projectManagers.length > 0 && (
-                  <optgroup label="Project Managers">
-                    {projectManagers.map((pm) => (
-                      <option key={pm.id} value={pm.id}>
-                        {pm.name} ({pm.email}) - Project Manager
-                      </option>
-                    ))}
-                  </optgroup>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Project Managers</h4>
+                    <div className="space-y-2">
+                      {projectManagers.map(pm => (
+                        <label key={pm.id} className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={formData.assigned_user_ids.includes(pm.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, pm.id]
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== pm.id)
+                                }));
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-gray-900">{pm.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">({pm.email}) - Project Manager</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </select>
+              </div>
+            )}
+            {formData.assigned_user_ids.length > 0 && (
+              <div className="mt-2 text-sm text-gray-600">
+                Selected: {formData.assigned_user_ids.length} user(s)
+              </div>
             )}
           </div>
         )}

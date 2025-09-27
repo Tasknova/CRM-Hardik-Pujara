@@ -1,17 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import Modal from '../ui/Modal';
-import { Plus, Users, BarChart3, UserPlus, ChevronDown, CheckCircle2, Calendar, Clock, AlertCircle, Calendar as CalendarIcon, Pencil, CalendarDays, List, Search, CheckSquare, Trash2, Play, Pause } from 'lucide-react';
+import { Plus, Users, BarChart3, UserPlus, ChevronDown, CheckCircle2, Calendar, Clock, AlertCircle, Calendar as CalendarIcon, Pencil, CalendarDays, List, Search, CheckSquare, Trash2, Play, Pause, Building2, UserCheck, Edit } from 'lucide-react';
 import { useRealtimeTasks } from '../../hooks/useRealtimeTasks';
 import { useLeaves } from '../../hooks/useLeaves';
 import { useDailyTasks } from '../../hooks/useDailyTasks';
+import { syncAllCompletedTasksWithStages } from '../../services/stageCompletion';
 import { TaskFilters } from '../../types';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import TaskCard from './TaskCard';
 import TaskForm from './TaskForm';
+import UrgencyIndicatorsLegend from './UrgencyIndicatorsLegend';
 import TaskFiltersComponent from './TaskFilters';
 import ProjectFiltersComponent from './ProjectFilters';
 import LeaveCalendar from './LeaveCalendar';
+import LeaveManagementPage from './LeaveManagementPage';
+import AllLeavesPage from './AllLeavesPage';
 import DashboardStats from './DashboardStats';
 import MembersList from './MembersList';
 import AdminsList from './AdminsList';
@@ -36,6 +40,9 @@ import TaskListView from './TaskListView';
 import TaskCalendarView from './TaskCalendarView';
 import { MemberTaskStats } from './MemberTaskStats';
 import { MemberDailyTaskStats } from './MemberDailyTaskStats';
+import BusinessDashboard from './BusinessDashboard';
+import AdminProfile from './AdminProfile';
+import Reports from './Reports';
 import { DailyTaskQuickStats } from './DailyTaskQuickStats';
 import { TaskQuickStats } from './TaskQuickStats';
 import { WebhookSettings } from './WebhookSettings';
@@ -46,13 +53,16 @@ import ClientsPage from './ClientsPage';
 import OwnersPage from './OwnersPage';
 import BuildersPage from './BuildersPage';
 import LoanProvidersPage from './LoanProvidersPage';
+import DocumentHub from './DocumentHub';
 
 interface AdminDashboardProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  dashboardMode?: 'team' | 'business';
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange, dashboardMode = 'team' }) => {
+  
   // All hooks at the top
   const { tasks, loading: tasksLoading, error: tasksError, addTask, updateTask, deleteTask, filterTasks, refetchTasks } = useRealtimeTasks();
   const { leaves, loading: leavesLoading, addLeave, deleteLeave, updateLeave, setLeaves } = useLeaves();
@@ -136,7 +146,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange 
   const [passwordError, setPasswordError] = useState('');
 
 // --- Holiday Add Handler ---
-const handleAddHoliday = async (holidayData: { name: string; date: string; description?: string }) => {
+const handleAddHoliday = async (holidayData: { holiday_name: string; date: string; description?: string }) => {
   try {
     const { data, error } = await supabase
       .from('company_holidays')
@@ -153,11 +163,11 @@ const handleAddHoliday = async (holidayData: { name: string; date: string; descr
 };
 
 // --- Holiday Update Handler ---
-const handleUpdateHoliday = async (holidayData: { id: string; name: string; date: string; description?: string }) => {
+const handleUpdateHoliday = async (holidayData: { id: string; holiday_name: string; date: string; description?: string }) => {
   try {
     const { data, error } = await supabase
       .from('company_holidays')
-      .update({ name: holidayData.name, date: holidayData.date, description: holidayData.description })
+      .update({ holiday_name: holidayData.holiday_name, date: holidayData.date, description: holidayData.description })
       .eq('id', holidayData.id)
       .select();
     if (error) throw error;
@@ -254,14 +264,14 @@ const handleDeleteHoliday = async (holidayId: string) => {
       };
       fetchDefaults();
     }
-    if (activeTab === 'holidays' || activeTab === 'leaves') {
+    if (activeTab === 'holidays' || activeTab === 'leaves' || activeTab === 'company-holidays') {
       const fetchHolidays = async () => {
         setHolidaysLoading(true);
         const { data, error } = await supabase
           .from('company_holidays')
           .select('*')
-          .gte('date', '2025-03-01')
-          .lte('date', '2026-02-28')
+          .gte('date', '2025-01-01')
+          .lte('date', '2026-12-31')
           .order('date');
         if (!error && data) {
           setHolidays(data);
@@ -445,8 +455,8 @@ const handleDeleteHoliday = async (holidayId: string) => {
                 "borderRadius": "rounded"
               },
               "tooltip": {
-                "showTooltip": true,
-                "tooltipMessage": "🚀 Ready to unlock some AI magic?",
+                "showTooltip": false,
+                "tooltipMessage": "",
                 "tooltipBackgroundColor": "#119cff",
                 "tooltipTextColor": "#f9faff",
                 "tooltipFontSize": 15
@@ -1139,6 +1149,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
     }
   };
 
+
   // Add this function to toggle the open state for each section
   const toggleSection = (sectionKey: keyof typeof openSections) => {
     setOpenSections(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
@@ -1158,7 +1169,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
           <div className="text-gray-500">No {title.toLowerCase()}.</div>
         ) : (
           <>
-            <div className="h-96 flex">
+            <div className="flex h-[28rem] w-full">
             <TaskCard key={tasks[0].id} task={tasks[0]} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} />
             </div>
             {tasks.length > 1 && !openSections[sectionKey] && (
@@ -1173,7 +1184,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
               <>
                 <div className="space-y-4">
                   {tasks.slice(1).map(task => (
-                    <div key={task.id} className="h-96 flex">
+                    <div key={task.id} className="flex h-[28rem] w-full">
                       <TaskCard task={task} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} />
                     </div>
                   ))}
@@ -1192,203 +1203,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
     </div>
   );
 
-  // Now, after all hooks, do conditional rendering:
-  if (activeTab === 'dashboard') {
-    // Date helpers
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-
-    // Recently Completed: completed within last 3 days
-    const recentlyCompletedTasks = tasks.filter(task => {
-      if (task.status !== 'completed' || !task.updated_at) return false;
-      const updated = new Date(task.updated_at);
-      const diff = (today.getTime() - updated.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
-      return diff <= 3 && diff >= 0;
-    });
-
-    // Due Today: due date is today and not completed
-    const dueTodayTasks = tasks.filter(task => {
-      const due = new Date(task.due_date);
-      return isSameDay(due, today) && task.status !== 'completed';
-    });
-
-    // Upcoming: due date is within next 3 days (excluding today)
-    const upcomingTasks = tasks.filter(task => {
-      const due = new Date(task.due_date);
-      const diff = (due.setHours(0,0,0,0) - today.getTime()) / (1000 * 60 * 60 * 24);
-      return diff > 0 && diff <= 3;
-    });
-
-    // Blocked: overdue and not completed, or status is 'blocked'
-    const blockedTasks = tasks.filter(task => {
-      const due = new Date(task.due_date);
-      return (task.status !== 'completed' && due < today) || task.status === 'blocked';
-    });
-
-    // Not Started: tasks with status 'not_started'
-    const notStartedTasks = tasks.filter(task => task.status === 'not_started');
-
-    // In Progress: tasks with status 'in_progress'
-    const inProgressTasks = tasks.filter(task => task.status === 'in_progress');
-
-    // Calculate on leave and working today with names
-    const todayStr = today.toISOString().split('T')[0];
-    const onLeaveToday = members.filter(member =>
-      leaves.some(leave => {
-        if (leave.user_id !== member.id || leave.status !== 'approved') return false;
-        if (leave.category === 'multi-day') {
-          return leave.from_date <= todayStr && leave.to_date >= todayStr;
-        } else {
-          return leave.leave_date === todayStr;
-        }
-      })
-    );
-    const workingToday = members.filter(member => !onLeaveToday.some(l => l.id === member.id));
-
-    // After the four task sections, add a summary for leaves
-    // Calculate on leave and working today
-    const onLeaveCount = onLeaveToday.length;
-    // Assume members state contains all team members
-    const totalMembers = members.length;
-    const workingTodayCount = totalMembers - onLeaveCount;
-
-    // Personalized greeting logic
-    const getGreeting = () => {
-      const hour = new Date().getHours();
-      if (hour < 12) return 'good morning';
-      if (hour < 18) return 'good afternoon';
-      return 'good evening';
-    };
-    const adminName = user?.name || 'Admin';
-
-    // Find next 5 upcoming holidays
-    const upcomingHolidays = holidays
-      .filter(h => new Date(h.date) >= today)
-      .slice(0, 5);
-
-    return (
-      <div className="space-y-8 px-2 md:px-8 lg:px-16 pb-8">
-        {/* Dashboard content starts here */}
-        <div className="pt-4 pb-2">
-        </div>
-        <DashboardStats tasks={tasks} leaves={leaves} />
-        
-        {/* Daily Tasks Overview */}
-        <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Daily Tasks Overview</h2>
-        <DailyTaskQuickStats dailyTasks={dailyTasks} />
-        
-        {/* Section title for leaves dashboard */}
-        <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Team Attendance Today</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
-          {/* Working today card */}
-          <div className="bg-white border border-gray-200 rounded-lg shadow p-6 flex flex-col items-center">
-            <div className="text-2xl font-bold text-green-700 flex items-center gap-2">
-              <Users className="w-6 h-6 text-green-500" /> Working today - {workingTodayCount}
-            </div>
-            <button
-              className="mt-3 px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-              onClick={() => setShowWorking(v => !v)}
-            >
-              {showWorking ? 'Hide' : 'Show'}
-            </button>
-            {showWorking && (
-              <ul className="mt-3 w-full text-center text-gray-700 text-base">
-                {workingTodayCount === 0 ? <li>No one working today</li> : workingToday.map(m => <li key={m.id}>{m.name}</li>)}
-              </ul>
-              )}
-            </div>
-          {/* On Leave card */}
-          <div className="bg-white border border-gray-200 rounded-lg shadow p-6 flex flex-col items-center">
-            <div className="text-2xl font-bold text-red-700 flex items-center gap-2">
-              <UserPlus className="w-6 h-6 text-red-500" /> On Leave - {onLeaveCount}
-          </div>
-            <button
-              className="mt-3 px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-              onClick={() => setShowLeave(v => !v)}
-            >
-              {showLeave ? 'Hide' : 'Show'}
-            </button>
-            {showLeave && (
-              <ul className="mt-3 w-full text-center text-gray-700 text-base">
-                {onLeaveCount === 0 ? <li>No one on leave today</li> : onLeaveToday.map(m => <li key={m.id}>{m.name}</li>)}
-              </ul>
-              )}
-            </div>
-          </div>
-        {/* Section title for task overview */}
-        <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Task Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {renderTaskSection('Recently Completed Tasks', CheckCircle2, recentlyCompletedTasks, 'recentlyCompleted', 'completed')}
-          {renderTaskSection('Due Today', Calendar, dueTodayTasks, 'dueToday', 'today')}
-          {renderTaskSection('Upcoming Tasks', Clock, upcomingTasks, 'upcoming', 'upcoming')}
-          {renderTaskSection('Blocked Tasks', AlertCircle, blockedTasks, 'blocked', 'blocked')}
-        </div>
-
-        {/* Member Task Statistics */}
-        <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Member Task Statistics</h2>
-        <MemberTaskStats 
-          tasks={tasks}
-          members={members}
-          admins={admins}
-          projectManagers={projectManagers}
-          currentUserId={user?.id}
-          showOnlyCurrentUser={false}
-        />
-
-        {/* Member Daily Task Statistics */}
-        <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Member Daily Task Statistics</h2>
-        <MemberDailyTaskStats 
-          dailyTasks={dailyTasks}
-          members={members}
-          admins={admins}
-          projectManagers={projectManagers}
-          currentUserId={user?.id}
-          showOnlyCurrentUser={false}
-        />
-        {/* Notifications summary at the top */}
-        {adminNotifications.length > 0 && (
-          <Card className="mb-6 p-4 border border-blue-200 bg-blue-50">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-bold text-blue-800">Recent Notifications</h2>
-              <Button size="sm" variant="primary" onClick={() => setActiveTab('notifications')}>
-                View All
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {adminNotifications.slice(0, 5).map(n => (
-                <div key={n.id + '-' + n.created_at} className="border-b last:border-b-0 pb-2 last:pb-0">
-                  <div className="font-semibold text-blue-900">{n.title}</div>
-                  <div className="text-sm text-blue-700">{n.message}</div>
-                  <div className="text-xs text-gray-500">{new Date(n.created_at).toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-        {/* Upcoming Holidays Section */}
-        <Card className="mb-6 p-4 border border-green-200 bg-green-50">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-bold text-green-800">Upcoming Holidays</h2>
-          </div>
-          <div className="space-y-2">
-            {upcomingHolidays.length === 0 ? (
-              <div className="text-gray-500">No upcoming holidays.</div>
-            ) : (
-              upcomingHolidays.map(h => (
-                <div key={h.id} className="border-b last:border-b-0 pb-2 last:pb-0 flex items-center gap-4">
-                  <CalendarIcon className="w-5 h-5 text-green-600" />
-                  <div className="font-semibold text-green-900">{h.name}</div>
-                  <div className="text-sm text-green-700">{new Date(h.date).toLocaleDateString()}</div>
-                  {h.description && <div className="text-xs text-gray-500 ml-2">{h.description}</div>}
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  // Now, after all hooks, do conditional rendering based on dashboard mode:
 
   if (activeTab === 'tasks') {
     return (
@@ -1413,6 +1228,18 @@ const handleDeleteHoliday = async (holidayId: string) => {
             >
               <Trash2 className="w-4 h-4 mr-2" />
               See Deleted Tasks
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                console.log('🔄 Syncing all completed tasks with stages...');
+                await syncAllCompletedTasksWithStages();
+                toast.success('Task-stage sync completed!');
+              }}
+              className="border-green-300 text-green-600 hover:bg-green-50"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Sync Tasks
             </Button>
             <Button
               icon={Plus}
@@ -1480,7 +1307,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
                   </div>
                 ) : (
                   filteredTasks.map(task => (
-                    <div key={task.id} className="flex h-[28rem]">
+                    <div key={task.id} className="flex h-[28rem] w-full">
                       <TaskCard
                         task={task}
                         onDelete={deleteTask}
@@ -1528,6 +1355,9 @@ const handleDeleteHoliday = async (holidayId: string) => {
           </>
         )}
 
+        {/* Urgency Indicators Legend */}
+        <UrgencyIndicatorsLegend />
+
         <TaskForm
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
@@ -1538,8 +1368,12 @@ const handleDeleteHoliday = async (holidayId: string) => {
   }
 
   if (activeTab === 'my-tasks') {
-    // Filter tasks to show only tasks assigned to the current admin
-    const myTasks = tasks.filter(task => task.user_id === user?.id);
+    // Filter tasks to show only tasks assigned to the current admin (using new multi-assignment logic)
+    const myTasks = tasks.filter(task => {
+      // Check if user is in the assigned_user_ids array (filter out null/undefined only)
+      const validAssignedIds = task.assigned_user_ids?.filter(id => id) || [];
+      return validAssignedIds.includes(user?.id || '');
+    });
     const filteredMyTasks = filterTasks(taskFilters, myTasks);
 
     return (
@@ -1584,6 +1418,9 @@ const handleDeleteHoliday = async (holidayId: string) => {
           </div>
         )}
 
+        {/* Daily Tasks Overview */}
+        <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Daily Tasks Overview</h2>
+
         {/* Loading State */}
         {tasksLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -1612,7 +1449,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
               </div>
             ) : (
               filteredMyTasks.map(task => (
-              <div key={task.id} className="flex h-[28rem]">
+              <div key={task.id} className="flex h-[28rem] w-full">
                 <TaskCard
                   task={task}
                   onDelete={deleteTask}
@@ -1630,10 +1467,14 @@ const handleDeleteHoliday = async (holidayId: string) => {
           </div>
         )}
 
+        {/* Urgency Indicators Legend */}
+        <UrgencyIndicatorsLegend />
+
         <TaskForm
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={handleAddTask}
+          isMyTasksPage={true}
         />
       </div>
     );
@@ -2447,141 +2288,8 @@ const handleDeleteHoliday = async (holidayId: string) => {
     );
   }
 
-  // Add profile tab for admin
-  if (activeTab === 'profile') {
-    if (!user || user.role !== 'admin') return null;
-    return (
-      <div className="space-y-6">
+  // Profile tab is handled in the main dashboard structure below
 
-        <Card className="max-w-md mx-auto p-6">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mb-2">
-              <span className="text-3xl font-bold text-blue-600">{user.name.charAt(0)}</span>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900">{user.name}</h2>
-            <div className="text-gray-700">{user.email}</div>
-            {user.phone && <div className="text-gray-700">Phone: {user.phone}</div>}
-            <div className="text-gray-700">Status: <span className={user.is_active ? 'text-green-600' : 'text-red-600'}>{user.is_active ? 'Active' : 'Inactive'}</span></div>
-            <div className="text-gray-500 text-sm">Created: {new Date(user.created_at).toLocaleDateString()}</div>
-            <div className="text-gray-500 text-sm">Updated: {new Date(user.updated_at).toLocaleDateString()}</div>
-            <div className="flex space-x-2 mt-4">
-              <Button variant="primary" onClick={() => setEditProfileOpen(true)}>Edit Profile</Button>
-              <Button variant="outline" onClick={() => setChangePasswordOpen(true)}>Change Password</Button>
-            </div>
-          </div>
-        </Card>
-
-        {/* Webhook Settings - Only for Super Admin */}
-        {isSuperAdmin && <WebhookSettings />}
-        
-        {/* Show message if not super admin */}
-        {!isSuperAdmin && user?.role === 'admin' && (
-          <Card className="max-w-md mx-auto p-6 bg-blue-50">
-            <div className="text-center">
-              <h3 className="text-lg font-semibold text-blue-900 mb-2">Webhook Settings</h3>
-              <p className="text-sm text-blue-700 mb-4">
-                Webhook settings are only available to the Super Administrator.
-              </p>
-              <p className="text-xs text-blue-600">
-                Please log in with the super admin account to access webhook controls.
-              </p>
-            </div>
-          </Card>
-        )}
-        {/* Edit Profile Modal */}
-        <Modal isOpen={editProfileOpen} onClose={() => setEditProfileOpen(false)} title="Edit Profile">
-          <form onSubmit={handleProfileUpdate} className="space-y-4">
-            <input
-              className="w-full border rounded px-3 py-2"
-              placeholder="Name"
-              value={profileForm.name}
-              onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))}
-              required
-            />
-            <input
-              className="w-full border rounded px-3 py-2"
-              placeholder="Phone"
-              value={profileForm.phone}
-              onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
-            />
-            <div className="flex space-x-2 justify-end">
-              <Button variant="outline" onClick={() => setEditProfileOpen(false)} type="button">Cancel</Button>
-              <Button variant="primary" type="submit" disabled={profileLoading}>{profileLoading ? 'Saving...' : 'Save'}</Button>
-            </div>
-          </form>
-        </Modal>
-        {/* Change Password Modal */}
-        <Modal isOpen={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} title="Change Password">
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setPasswordError('');
-              if (passwordForm.new !== passwordForm.confirm) {
-                setPasswordError('New passwords do not match.');
-                return;
-              }
-              setPasswordLoading(true);
-              if (!user) {
-                setPasswordError('User not found.');
-                setPasswordLoading(false);
-                return;
-              }
-              const ok = await authService.verifyAdminPassword(user.id, passwordForm.current);
-              if (!ok) {
-                setPasswordError('Current password is incorrect.');
-                setPasswordLoading(false);
-                return;
-              }
-              const password_hash = btoa(passwordForm.new);
-              const { error } = await supabase
-                .from('admins')
-                .update({ password_hash })
-                .eq('id', user.id);
-              setPasswordLoading(false);
-              if (!error) {
-                setPasswordForm({ current: '', new: '', confirm: '' });
-                setChangePasswordOpen(false);
-                alert('Password updated successfully.');
-              } else {
-                setPasswordError('Failed to update password: ' + error.message);
-              }
-            }}
-            className="space-y-4"
-          >
-            {passwordError && <div className="p-2 bg-red-100 text-red-700 rounded">{passwordError}</div>}
-            <input
-              className="w-full border rounded px-3 py-2"
-              type="password"
-              placeholder="Current Password"
-              value={passwordForm.current}
-              onChange={e => setPasswordForm(f => ({ ...f, current: e.target.value }))}
-              required
-            />
-            <input
-              className="w-full border rounded px-3 py-2"
-              type="password"
-              placeholder="New Password"
-              value={passwordForm.new}
-              onChange={e => setPasswordForm(f => ({ ...f, new: e.target.value }))}
-              required
-            />
-            <input
-              className="w-full border rounded px-3 py-2"
-              type="password"
-              placeholder="Confirm New Password"
-              value={passwordForm.confirm}
-              onChange={e => setPasswordForm(f => ({ ...f, confirm: e.target.value }))}
-              required
-            />
-            <div className="flex space-x-2 justify-end">
-              <Button variant="outline" onClick={() => setChangePasswordOpen(false)} type="button">Cancel</Button>
-              <Button variant="primary" type="submit" disabled={passwordLoading}>{passwordLoading ? 'Saving...' : 'Save'}</Button>
-            </div>
-          </form>
-        </Modal>
-      </div>
-    );
-  }
 
   // Add project manager management tab for admin
   if (activeTab === 'project-manager-management') {
@@ -3266,35 +2974,469 @@ const handleDeleteHoliday = async (holidayId: string) => {
     return <DeletedTasksPage onBack={() => onTabChange('tasks')} />;
   }
 
-  if (activeTab === 'rental-property') {
-    return <RentalPropertyPage onBack={() => onTabChange('dashboard')} />;
-  }
-
-  if (activeTab === 'resale-property') {
-    return <ResalePropertyPage onBack={() => onTabChange('dashboard')} />;
-  }
-
-  if (activeTab === 'builder-property') {
-    return <BuilderPropertyPage onBack={() => onTabChange('dashboard')} />;
-  }
-
-  if (activeTab === 'clients') {
-    return <ClientsPage />;
-  }
-
-  if (activeTab === 'owners') {
-    return <OwnersPage />;
-  }
-
-  if (activeTab === 'builders') {
-    return <BuildersPage />;
-  }
-  if (activeTab === 'loan-providers') {
-    return <LoanProvidersPage />;
-  }
 
   return (
     <>
+
+      {/* Business Dashboard */}
+      {dashboardMode === 'business' && (
+        <>
+          {activeTab === 'dashboard' && <BusinessDashboard onTabChange={onTabChange} />}
+          {activeTab === 'rental-property' && <RentalPropertyPage onBack={() => onTabChange('dashboard')} />}
+          {activeTab === 'resale-property' && <ResalePropertyPage onBack={() => onTabChange('dashboard')} />}
+          {activeTab === 'builder-property' && <BuilderPropertyPage onBack={() => onTabChange('dashboard')} />}
+          {activeTab === 'clients' && <ClientsPage />}
+          {activeTab === 'owners' && <OwnersPage />}
+          {activeTab === 'builders' && <BuildersPage />}
+          {activeTab === 'loan-providers' && <LoanProvidersPage />}
+          {activeTab === 'projects' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Projects</h2>
+                  <p className="text-gray-600">Manage all business projects</p>
+                </div>
+                <Button onClick={() => setIsProjectFormOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Project
+                </Button>
+              </div>
+              {/* Projects content will be rendered here */}
+            </div>
+          )}
+          {activeTab === 'document-hub' && <DocumentHub />}
+          {activeTab === 'project-managers' && <ProjectManagerManagement />}
+          {activeTab === 'profile' && <AdminProfile />}
+        </>
+      )}
+
+      {/* Team Management Dashboard */}
+      {dashboardMode === 'team' && (
+        <>
+          {/* All existing team management content will be rendered here */}
+          {activeTab === 'dashboard' && (() => {
+            // Date helpers
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+            // Recently Completed: completed within last 3 days
+            const recentlyCompletedTasks = tasks.filter(task => {
+              if (task.status !== 'completed' || !task.updated_at) return false;
+              const updated = new Date(task.updated_at);
+              const diff = (today.getTime() - updated.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+              return diff <= 3 && diff >= 0;
+            });
+
+            // Due Today: due date is today and not completed
+            const dueTodayTasks = tasks.filter(task => {
+              const due = new Date(task.due_date);
+              return isSameDay(due, today) && task.status !== 'completed';
+            });
+
+            // Upcoming: due date is within next 3 days (excluding today)
+            const upcomingTasks = tasks.filter(task => {
+              const due = new Date(task.due_date);
+              const diff = (due.setHours(0,0,0,0) - today.getTime()) / (1000 * 60 * 60 * 24);
+              return diff > 0 && diff <= 3;
+            });
+
+            // Blocked: overdue and not completed, or status is 'blocked'
+            const blockedTasks = tasks.filter(task => {
+              const due = new Date(task.due_date);
+              return (task.status !== 'completed' && due < today) || task.status === 'blocked';
+            });
+
+            // Calculate on leave and working today with names
+            const todayStr = today.toISOString().split('T')[0];
+            const onLeaveToday = members.filter(member =>
+              leaves.some(leave => {
+                if (leave.user_id !== member.id || leave.status !== 'approved') return false;
+                if (leave.category === 'multi-day') {
+                  return leave.from_date <= todayStr && leave.to_date >= todayStr;
+                } else {
+                  return leave.leave_date === todayStr;
+                }
+              })
+            );
+            const workingToday = members.filter(member => !onLeaveToday.some(l => l.id === member.id));
+
+            // Calculate on leave and working today
+            const onLeaveCount = onLeaveToday.length;
+            const totalMembers = members.length;
+            const workingTodayCount = totalMembers - onLeaveCount;
+
+            // Find next 5 upcoming holidays
+            const upcomingHolidays = holidays
+              .filter(h => new Date(h.date) >= today)
+              .slice(0, 5);
+
+            return (
+              <div className="space-y-8 px-2 md:px-8 lg:px-16 pb-8">
+                {/* Dashboard content starts here */}
+                <div className="pt-4 pb-2">
+                </div>
+              <DashboardStats tasks={tasks} leaves={leaves} />
+              
+              {/* Daily Tasks Overview */}
+              <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Daily Tasks Overview</h2>
+              <DailyTaskQuickStats dailyTasks={dailyTasks} />
+              
+              {/* Section title for leaves dashboard */}
+              <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Team Attendance Today</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mb-8">
+                {/* Working today card */}
+                <div className="bg-white border border-gray-200 rounded-lg shadow p-6 flex flex-col items-center">
+                  <div className="text-2xl font-bold text-green-700 flex items-center gap-2">
+                    <Users className="w-6 h-6 text-green-500" /> Working today - {workingTodayCount}
+                  </div>
+                  <button
+                    className="mt-3 px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    onClick={() => setShowWorking(v => !v)}
+                  >
+                    {showWorking ? 'Hide' : 'Show'}
+                  </button>
+                  {showWorking && (
+                    <ul className="mt-3 w-full text-center text-gray-700 text-base">
+                      {workingTodayCount === 0 ? <li>No one working today</li> : workingToday.map(m => <li key={m.id}>{m.name}</li>)}
+                    </ul>
+                    )}
+                  </div>
+                {/* On Leave card */}
+                <div className="bg-white border border-gray-200 rounded-lg shadow p-6 flex flex-col items-center">
+                  <div className="text-2xl font-bold text-red-700 flex items-center gap-2">
+                    <UserPlus className="w-6 h-6 text-red-500" /> On Leave - {onLeaveCount}
+                </div>
+                  <button
+                    className="mt-3 px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-blue-700 hover:bg-blue-50 hover:border-blue-400 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    onClick={() => setShowLeave(v => !v)}
+                  >
+                    {showLeave ? 'Hide' : 'Show'}
+                  </button>
+                  {showLeave && (
+                    <ul className="mt-3 w-full text-center text-gray-700 text-base">
+                      {onLeaveCount === 0 ? <li>No one on leave today</li> : onLeaveToday.map(m => <li key={m.id}>{m.name}</li>)}
+                    </ul>
+                    )}
+                  </div>
+                </div>
+              {/* Section title for task overview */}
+              <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Task Overview</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {renderTaskSection('Recently Completed Tasks', CheckCircle2, recentlyCompletedTasks, 'recentlyCompleted', 'completed')}
+                {renderTaskSection('Due Today', Calendar, dueTodayTasks, 'dueToday', 'today')}
+                {renderTaskSection('Upcoming Tasks', Clock, upcomingTasks, 'upcoming', 'upcoming')}
+                {renderTaskSection('Blocked Tasks', AlertCircle, blockedTasks, 'blocked', 'blocked')}
+              </div>
+
+              {/* Member Task Statistics */}
+              <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Member Task Statistics</h2>
+              <MemberTaskStats 
+                tasks={tasks}
+                members={members}
+                admins={admins}
+                projectManagers={projectManagers}
+                currentUserId={user?.id}
+                showOnlyCurrentUser={false}
+              />
+
+              {/* Member Daily Task Statistics */}
+              <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Member Daily Task Statistics</h2>
+              <MemberDailyTaskStats 
+                dailyTasks={dailyTasks}
+                members={members}
+                admins={admins}
+                projectManagers={projectManagers}
+                currentUserId={user?.id}
+                showOnlyCurrentUser={false}
+              />
+              {/* Notifications summary at the top */}
+              {adminNotifications.length > 0 && (
+                <Card className="mb-6 p-4 border border-blue-200 bg-blue-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-bold text-blue-800">Recent Notifications</h2>
+                    <Button size="sm" variant="primary" onClick={() => onTabChange('notifications')}>
+                      View All
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    {adminNotifications.slice(0, 5).map(n => (
+                      <div key={n.id + '-' + n.created_at} className="border-b last:border-b-0 pb-2 last:pb-0">
+                        <div className="font-semibold text-blue-900">{n.title}</div>
+                        <div className="text-sm text-blue-700">{n.message}</div>
+                        <div className="text-xs text-gray-500">{new Date(n.created_at).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+              {/* Upcoming Holidays Section */}
+              <Card className="mb-6 p-4 border border-green-200 bg-green-50">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-bold text-green-800">Upcoming Holidays</h2>
+                </div>
+                <div className="space-y-2">
+                  {upcomingHolidays.length === 0 ? (
+                    <div className="text-gray-500">No upcoming holidays.</div>
+                  ) : (
+                    upcomingHolidays.map(h => (
+                      <div key={h.id} className="border-b last:border-b-0 pb-2 last:pb-0 flex items-center gap-4">
+                        <CalendarIcon className="w-5 h-5 text-green-600" />
+                        <div className="font-semibold text-green-900">{h.name}</div>
+                        <div className="text-sm text-green-700">{new Date(h.date).toLocaleDateString()}</div>
+                        {h.description && <div className="text-xs text-gray-500 ml-2">{h.description}</div>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+            );
+          })()}
+          {activeTab === 'tasks' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">All Tasks</h2>
+                  <p className="text-gray-600">Manage and track all team tasks</p>
+                </div>
+                <Button onClick={() => setIsTaskFormOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Task
+                </Button>
+              </div>
+              {/* Tasks content */}
+            </div>
+          )}
+          {activeTab === 'my-tasks' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">My Tasks</h2>
+              {/* My Tasks content */}
+            </div>
+          )}
+          {activeTab === 'leave-management' && <LeaveManagementPage />}
+          {activeTab === 'daily-tasks' && <DailyTasksPage />}
+          {activeTab === 'deleted-tasks' && <DeletedTasksPage />}
+          {activeTab === 'all-leaves' && <AllLeavesPage />}
+          {activeTab === 'company-holidays' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Company Holidays</h2>
+                  <p className="text-gray-600">Manage company holidays and important dates</p>
+            </div>
+                <div className="flex items-center space-x-4">
+                  {/* View Toggle */}
+                  <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-all duration-200 ${
+                        holidayView === 'calendar' 
+                          ? 'bg-green-100 text-green-700 border border-green-200' 
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                      }`}
+                      onClick={() => setHolidayView('calendar')}
+                    >
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Calendar View
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-all duration-200 ${
+                        holidayView === 'list' 
+                          ? 'bg-green-100 text-green-700 border border-green-200' 
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+                      }`}
+                      onClick={() => setHolidayView('list')}
+                    >
+                      <div className="flex items-center">
+                        <List className="h-4 w-4 mr-2" />
+                        List View
+                      </div>
+                    </button>
+                  </div>
+                  
+                  {/* Add Holiday Button */}
+                  <Button 
+                    onClick={() => {
+                      setHolidayForm({ holiday_name: '', date: '', description: '' });
+                      setEditHoliday(null);
+                      setHolidayModalOpen(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Holiday
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
+                  placeholder="Search holidays..."
+                  className="pl-10 pr-20 py-2 w-full border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+                  value={holidaySearch}
+                  onChange={(e) => setHolidaySearch(e.target.value)}
+                />
+              </div>
+
+              {/* Content based on view */}
+              {holidaysLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                </div>
+              ) : holidayView === 'calendar' ? (
+            <HolidayCalendar 
+              holidays={holidays}
+              onAddHoliday={handleAddHoliday}
+              onUpdateHoliday={handleUpdateHoliday}
+              onDeleteHoliday={handleDeleteHoliday}
+                  isAdmin={true}
+                />
+              ) : (
+                <Card className="border border-gray-200 shadow-sm">
+                  <div className="p-6">
+                    {holidays.filter(h => 
+                      h.holiday_name.toLowerCase().includes(holidaySearch.toLowerCase()) ||
+                      (h.description && h.description.toLowerCase().includes(holidaySearch.toLowerCase()))
+                    ).length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Holiday Name
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Description
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {holidays
+                              .filter(h => 
+                                h.holiday_name.toLowerCase().includes(holidaySearch.toLowerCase()) ||
+                                (h.description && h.description.toLowerCase().includes(holidaySearch.toLowerCase()))
+                              )
+                              .map((holiday) => (
+                                <tr key={holiday.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm font-medium text-gray-900">{holiday.holiday_name}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-sm text-gray-900">
+                                      {new Date(holiday.date).toLocaleDateString('en-US', {
+                                        weekday: 'long',
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                      })}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="text-sm text-gray-900 max-w-xs truncate">
+                                      {holiday.description || 'No description'}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditHoliday(holiday);
+                                          setHolidayForm({
+                                            holiday_name: holiday.holiday_name,
+                                            date: holiday.date,
+                                            description: holiday.description || ''
+                                          });
+                                          setHolidayModalOpen(true);
+                                        }}
+                                        disabled={new Date(holiday.date) < new Date()}
+                                      >
+                                        <Edit className="h-4 w-4 mr-1" />
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => {
+                                          if (window.confirm(`Are you sure you want to delete the holiday "${holiday.holiday_name}"? This action cannot be undone.`)) {
+                                            handleDeleteHoliday(holiday.id);
+                                          }
+                                        }}
+                                        disabled={new Date(holiday.date) < new Date()}
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-1" />
+                                        Delete
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Calendar className="mx-auto h-12 w-12 text-gray-400" />
+                        <h3 className="mt-2 text-sm font-medium text-gray-900">No holidays found</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {holidaySearch ? 'No holidays match your search criteria.' : 'No holidays have been added yet.'}
+                        </p>
+                        {!holidaySearch && (
+                          <div className="mt-6">
+                            <Button
+                              onClick={() => {
+                                setHolidayForm({ holiday_name: '', date: '', description: '' });
+                                setEditHoliday(null);
+                                setHolidayModalOpen(true);
+                              }}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Your First Holiday
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+          {activeTab === 'team-members' && <MembersList />}
+          {activeTab === 'reports' && <Reports />}
+          {activeTab === 'projects' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Projects</h2>
+                  <p className="text-gray-600">Manage team projects</p>
+                </div>
+                <Button onClick={() => setIsProjectFormOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Project
+                </Button>
+              </div>
+              {/* Projects content */}
+            </div>
+          )}
+          {activeTab === 'admin-management' && <AdminsList />}
+          {activeTab === 'profile' && <AdminProfile />}
+        </>
+      )}
+
       {/* Client Creation Modal */}
       <Modal 
         isOpen={showClientModal} 

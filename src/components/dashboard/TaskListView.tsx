@@ -161,9 +161,19 @@ const TaskListView: React.FC<TaskListViewProps> = ({
                     <td className="px-4 py-4">
                       <div className="flex items-center space-x-2">
                         <User className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">
-                          {getUserName(task.user_id)}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {task.assignments && task.assignments.length > 0 ? (
+                            task.assignments.map((assignment, index) => (
+                              <span key={assignment.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                {assignment.member_name || 'Unknown'}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">
+                              Unassigned
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                   )}
@@ -296,7 +306,19 @@ const TaskListView: React.FC<TaskListViewProps> = ({
               {showUser && (
                 <div>
                   <p className="font-medium text-gray-700">Assigned To</p>
-                  <p className="text-gray-900">{getUserName(selectedTask.user_id)}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedTask.assignments && selectedTask.assignments.length > 0 ? (
+                      selectedTask.assignments.map((assignment, index) => (
+                        <span key={assignment.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          {assignment.member_name || 'Unknown'}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">
+                        Unassigned
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
               <div>
@@ -358,8 +380,11 @@ const TaskListView: React.FC<TaskListViewProps> = ({
         onConfirm={confirmDelete}
         taskName={taskToDelete?.task_name || ''}
         taskDescription={taskToDelete?.description}
-        assignedTo={taskToDelete?.user?.name}
-        projectName={taskToDelete?.project?.name}
+        assignedTo={taskToDelete?.assignments && taskToDelete.assignments.length > 0 
+          ? taskToDelete.assignments.map(a => a.member_name || 'Unknown').join(', ')
+          : 'Unassigned'
+        }
+        projectName={taskToDelete?.project_id ? getProjectName(taskToDelete.project_id) : 'No Project'}
         priority={taskToDelete?.priority}
         dueDate={taskToDelete?.due_date}
         taskType={taskType}

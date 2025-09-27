@@ -49,7 +49,12 @@ export const MemberTaskStats: React.FC<MemberTaskStatsProps> = ({
         : allUsers;
 
       const stats = usersToShow.map(user => {
-        const userTasks = tasks.filter(task => task.user_id === user.id);
+        // Count tasks where user is assigned via assigned_user_ids (new multi-assignment logic)
+        const userTasks = tasks.filter(task => {
+          // Check if user is in the assigned_user_ids array (filter out null/undefined only)
+          const validAssignedIds = task.assigned_user_ids?.filter(id => id) || [];
+          return validAssignedIds.includes(user.id);
+        });
         
         return {
           id: user.id,

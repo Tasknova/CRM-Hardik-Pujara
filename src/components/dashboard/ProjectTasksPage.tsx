@@ -64,14 +64,14 @@ const ProjectTasksPage: React.FC = () => {
     }
   };
 
-  const handleDailyTaskStatusChange = async (id: string, status: 'pending' | 'completed' | 'skipped') => {
+  const handleDailyTaskStatusChange = async (id: string, status: 'pending' | 'completed' | 'skipped', skipReason?: string) => {
     try {
       switch (status) {
         case 'completed':
           await markDailyCompleted(id);
           break;
         case 'skipped':
-          await markDailySkipped(id);
+          await markDailySkipped(id, skipReason);
           break;
         case 'pending':
           await markDailyPending(id);

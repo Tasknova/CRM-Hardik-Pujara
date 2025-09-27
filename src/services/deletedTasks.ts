@@ -26,7 +26,8 @@ export const deletedTasksService = {
         updated_at: taskData.updated_at,
         task_type: taskType,
         task_date: taskData.task_date,
-        is_active: taskData.is_active
+        is_active: taskData.is_active,
+        assigned_user_ids: taskData.assigned_user_ids || []
       };
 
       const { data, error } = await supabase

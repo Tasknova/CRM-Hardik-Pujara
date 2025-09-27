@@ -668,7 +668,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           <div className="text-gray-500">No {title.toLowerCase()}.</div>
         ) : (
           <>
-            <div className="h-96 flex">
+            <div className="flex h-[28rem] w-full">
             <TaskCard key={tasks[0].id} task={tasks[0]} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} />
             </div>
             {tasks.length > 1 && !openSections[sectionKey] && (
@@ -683,7 +683,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
               <>
                 <div className="space-y-4">
                                      {tasks.slice(1).map(task => (
-                     <div key={task.id} className="h-96 flex">
+                     <div key={task.id} className="flex h-[28rem] w-full">
                        <TaskCard task={task} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} />
                      </div>
                    ))}
@@ -895,6 +895,9 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           </div>
         )}
 
+        {/* Daily Tasks Overview */}
+        <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Daily Tasks Overview</h2>
+        
         {/* Loading State */}
         {tasksLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -925,7 +928,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                   </div>
                 ) : (
                   filteredTasksForDisplay.map(task => (
-                    <div key={task.id} className="flex h-[28rem]">
+                    <div key={task.id} className="flex h-[28rem] w-full">
                       <TaskCard
                         task={task}
                         onDelete={deleteTask}
@@ -1062,7 +1065,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
               </div>
             ) : (
               filteredMyTasks.map(task => (
-                <div key={task.id} className="flex h-[28rem]">
+                <div key={task.id} className="flex h-[28rem] w-full">
                   <TaskCard
                     task={task}
                     onDelete={deleteTask}

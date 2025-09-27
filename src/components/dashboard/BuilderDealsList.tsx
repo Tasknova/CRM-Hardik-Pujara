@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Search, Eye, Trash2, Building, MapPin, Calendar, DollarSign, Users, Edit } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Eye, Trash2, Building, MapPin, Calendar, DollarSign, Users, Edit, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -125,6 +125,26 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
 
   const handleEditDeal = (dealId: string) => {
     onEditDeal(dealId);
+  };
+
+  const handleMarkComplete = async (dealId: string) => {
+    try {
+      const { error } = await supabase
+        .from('builder_deals')
+        .update({ status: 'completed' })
+        .eq('id', dealId);
+
+      if (error) {
+        console.error('Error marking deal as complete:', error);
+        toast.error('Failed to mark deal as complete');
+        return;
+      }
+
+      toast.success('Deal marked as complete successfully');
+    } catch (error) {
+      console.error('Error marking deal as complete:', error);
+      toast.error('Failed to mark deal as complete');
+    }
   };
 
   const filteredDeals = deals.filter(deal =>
@@ -288,6 +308,15 @@ const BuilderDealsList: React.FC<BuilderDealsListProps> = ({ dealType, onBack, o
                     </div>
                   </div>
                   <div className="flex space-x-2">
+                    {deal.status === 'active' && (
+                      <button
+                        onClick={() => handleMarkComplete(deal.id)}
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                        title="Mark as Complete"
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleEditDeal(deal.id)}
                       className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"

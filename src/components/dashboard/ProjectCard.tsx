@@ -1,7 +1,7 @@
 import React from 'react';
 import { Project, Task } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { Edit2, Trash2, Calendar, Building, Eye, CheckCircle2, Play, Clock, CheckSquare } from 'lucide-react';
+import { Edit2, Trash2, Calendar, Building, Eye, CheckCircle2, Play, Clock, CheckSquare, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -170,15 +170,25 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
           </div>
         </div>
 
-        {/* View Tasks Button - at bottom */}
-        <Button
-          className="w-full text-sm py-2"
-          variant="primary"
-          onClick={() => navigate(`/projects/${project.id}/tasks`)}
-        >
-          <Eye className="w-4 h-4 mr-2" />
-          View Tasks
-        </Button>
+        {/* Action Buttons - at bottom */}
+        <div className="flex gap-2">
+          <Button
+            className="flex-1 text-sm py-2"
+            variant="primary"
+            onClick={() => navigate(`/projects/${project.id}/tasks`)}
+          >
+            <Eye className="w-4 h-4 mr-2" />
+            View Tasks
+          </Button>
+          <Button
+            className="flex-1 text-sm py-2"
+            variant="outline"
+            onClick={() => navigate(`/projects/${project.id}/documents`)}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Documents
+          </Button>
+        </div>
       </div>
     </Card>
   );

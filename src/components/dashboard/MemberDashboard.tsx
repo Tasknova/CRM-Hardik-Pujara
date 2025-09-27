@@ -444,7 +444,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
           <div className="text-gray-500">No {title.toLowerCase()}.</div>
         ) : (
           <>
-            <div className="h-96 flex">
+            <div className="flex h-[28rem] w-full">
               <TaskCard 
                 key={tasks[0].id} 
                 task={tasks[0]} 
@@ -468,7 +468,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
               <>
                 <div className="space-y-4">
                   {tasks.slice(1).map(task => (
-                    <div key={task.id} className="h-96 flex">
+                    <div key={task.id} className="flex h-[28rem] w-full">
                       <TaskCard 
                         task={task} 
                         showUser={true}
@@ -521,6 +521,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
     // Blocked: overdue and not completed, or status is 'blocked'
     const blockedTasks = tasks.filter(task => {
       const due = new Date(task.due_date);
+      due.setHours(0, 0, 0, 0);
       return (task.status !== 'completed' && due < today) || task.status === 'blocked';
     });
 
@@ -619,6 +620,9 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
           />
         </div>
 
+        {/* Daily Tasks Overview */}
+        <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Daily Tasks Overview</h2>
+        
         {/* Loading State */}
         {tasksLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -649,7 +653,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
                   </div>
                 ) : (
                   filteredTasks.map(task => (
-                    <div key={task.id} className="flex h-[28rem]">
+                    <div key={task.id} className="flex h-[28rem] w-full">
                       <TaskCard
                         task={task}
                         showUser={true}

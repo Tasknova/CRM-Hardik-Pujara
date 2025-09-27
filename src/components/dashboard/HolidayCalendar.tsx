@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 // Define the Holiday interface
 export interface Holiday {
   id: string;
-  name: string;
+  holiday_name: string;
   date: string;
   description?: string;
   created_at?: string;
@@ -36,7 +36,7 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
   const [showHolidayDetails, setShowHolidayDetails] = useState<boolean>(false);
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
   const [holidayForm, setHolidayForm] = useState<Omit<Holiday, 'id' | 'created_at'>>({ 
-    name: '', 
+    holiday_name: '', 
     date: '', 
     description: '' 
   });
@@ -113,7 +113,7 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
     e.preventDefault();
     
     // Basic validation
-    if (!holidayForm.name.trim()) {
+    if (!holidayForm.holiday_name.trim()) {
       toast.error('Please enter a holiday name');
       return;
     }
@@ -147,9 +147,11 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
   // Handle delete holiday
   const handleDeleteHoliday = () => {
     if (selectedHoliday?.id) {
-      onDeleteHoliday(selectedHoliday.id);
-      setShowHolidayDetails(false);
-      setSelectedHoliday(null);
+      if (window.confirm(`Are you sure you want to delete the holiday "${selectedHoliday.holiday_name}"? This action cannot be undone.`)) {
+        onDeleteHoliday(selectedHoliday.id);
+        setShowHolidayDetails(false);
+        setSelectedHoliday(null);
+      }
     }
   };
 
@@ -171,7 +173,7 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
         {isAdmin && (
           <Button 
             onClick={() => {
-              setHolidayForm({ name: '', date: '', description: '' });
+              setHolidayForm({ holiday_name: '', date: '', description: '' });
               setSelectedHoliday(null);
               setShowHolidayForm(true);
             }}
@@ -214,6 +216,7 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
                 h-24 p-1 border border-gray-100 cursor-pointer
                 ${isToday ? 'bg-blue-50' : ''}
                 ${isSelected ? 'ring-2 ring-blue-500' : ''}
+                ${holiday ? 'bg-green-50 hover:bg-green-100' : ''}
                 ${isInPast ? 'bg-gray-50' : 'hover:bg-gray-50'}
               `}
             >
@@ -223,12 +226,12 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
                     {day}
                   </span>
                   {holiday && (
-                    <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                    <span className="h-2 w-2 rounded-full bg-green-500"></span>
                   )}
                 </div>
                 {holiday && (
                   <div className="mt-1 text-xs text-gray-700 truncate">
-                    {holiday.name}
+                    {holiday.holiday_name}
                   </div>
                 )}
               </div>
@@ -249,8 +252,8 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
             <input
               type="text"
               className="w-full border rounded px-3 py-2"
-              value={holidayForm.name}
-              onChange={(e) => setHolidayForm({...holidayForm, name: e.target.value})}
+              value={holidayForm.holiday_name}
+              onChange={(e) => setHolidayForm({...holidayForm, holiday_name: e.target.value})}
               placeholder="Enter holiday name"
               required
             />
@@ -300,7 +303,7 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
         {selectedHoliday && (
           <div className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold">{selectedHoliday.name}</h3>
+              <h3 className="text-lg font-semibold">{selectedHoliday.holiday_name}</h3>
               <p className="text-gray-500">
                 {format(new Date(selectedHoliday.date), 'EEEE, MMMM d, yyyy')}
               </p>
@@ -320,7 +323,7 @@ const HolidayCalendar: React.FC<HolidayCalendarProps> = ({
                     variant="outline"
                     onClick={() => {
                       setHolidayForm({
-                        name: selectedHoliday.name,
+                        holiday_name: selectedHoliday.holiday_name,
                         date: selectedHoliday.date,
                         description: selectedHoliday.description || ''
                       });

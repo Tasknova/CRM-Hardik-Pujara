@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, Clock, AlertTriangle, Calendar } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Play, FileText, Pause } from 'lucide-react';
 import { Task, Leave } from '../../types';
 import Card from '../ui/Card';
 
@@ -8,20 +8,21 @@ interface DashboardStatsProps {
   leaves: Leave[];
 }
 
-const DashboardStats: React.FC<DashboardStatsProps> = ({ tasks, leaves }) => {
-  const now = new Date();
+const DashboardStats: React.FC<DashboardStatsProps> = ({ tasks }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
   const notStartedTasks = tasks.filter(task => task.status === 'not_started').length;
+  const pendingTasks = tasks.filter(task => task.status === 'pending').length;
   const inProgressTasks = tasks.filter(task => task.status === 'in_progress').length;
   // Blocked: not completed and due before today, or status 'blocked'
   const blockedTasks = tasks.filter(task => {
     const due = new Date(task.due_date);
-    return (task.status !== 'completed' && due < today) || task.status === 'blocked';
+    return (task.status !== 'completed' && due < today) || (task.status as string) === 'blocked';
   }).length;
-  const totalLeaves = leaves.length;
+  // Incomplete Tasks: total of all tasks whose status != completed
+  const incompleteTasks = tasks.filter(task => task.status !== 'completed').length;
 
   const stats = [
     {
@@ -34,7 +35,14 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ tasks, leaves }) => {
     {
       label: 'Not Started',
       value: notStartedTasks,
-      icon: Clock,
+      icon: Play,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100'
+    },
+    {
+      label: 'Pending',
+      value: pendingTasks,
+      icon: Pause,
       color: 'text-gray-600',
       bgColor: 'bg-gray-100'
     },
@@ -53,16 +61,16 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ tasks, leaves }) => {
       bgColor: 'bg-red-100'
     },
     {
-      label: 'Total Leaves',
-      value: totalLeaves,
-      icon: Calendar,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
+      label: 'Incomplete Tasks',
+      value: incompleteTasks,
+      icon: FileText,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-100'
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
       {stats.map((stat, index) => {
         const Icon = stat.icon;
         return (

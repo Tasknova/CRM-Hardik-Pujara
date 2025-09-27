@@ -13,6 +13,7 @@ import AdminProfile from './components/dashboard/AdminProfile';
 import Reports from './components/dashboard/Reports';
 import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import ProjectTasksPage from './components/dashboard/ProjectTasksPage';
+import ProjectDocuments from './components/dashboard/ProjectDocuments';
 import Footer from './components/layout/Footer';
 import { supabase } from './lib/supabase';
 import NotificationsPage from './components/dashboard/NotificationsPage';
@@ -29,6 +30,7 @@ const AppContent: React.FC = () => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [showBadge, setShowBadge] = useState(true);
   const [filteredNotificationsCount, setFilteredNotificationsCount] = useState(0);
+  const [dashboardMode, setDashboardMode] = useState<'team' | 'business'>('team');
   const SIDEBAR_GAP = 16; // px
 
   React.useEffect(() => {
@@ -94,18 +96,25 @@ const AppContent: React.FC = () => {
     setActiveTab('notifications');
   };
 
+  const handleProfileClick = () => {
+    setActiveTab('profile');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
              <Header 
          unreadNotifications={filteredNotificationsCount === 0 ? 0 : unreadNotifications}
          onNotificationsClick={handleNotificationsClick}
          activeTab={activeTab}
+         onProfileClick={handleProfileClick}
        />
       <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isOpen={sidebarOpen}
         setIsOpen={setSidebarOpen}
+        dashboardMode={user?.role === 'admin' ? dashboardMode : undefined}
+        onDashboardModeChange={user?.role === 'admin' ? setDashboardMode : undefined}
       />
       <main
         className="flex-1 transition-all duration-500 pr-4 md:pr-8 lg:pr-16"
@@ -115,12 +124,17 @@ const AppContent: React.FC = () => {
       >
         <Routes>
           <Route path="/projects/:projectId/tasks" element={<ProjectTasksPage />} />
+          <Route path="/projects/:projectId/documents" element={<ProjectDocuments />} />
           <Route path="*" element={
             user.role === 'admin' ? (
               activeTab === 'profile' ? <AdminProfile />
               : activeTab === 'reports' ? <Reports />
               : activeTab === 'notifications' ? <NotificationsPage setFilteredNotificationsCount={setFilteredNotificationsCount} />
-              : <AdminDashboard activeTab={activeTab} onTabChange={setActiveTab} />
+              : <AdminDashboard 
+                  activeTab={activeTab} 
+                  onTabChange={setActiveTab}
+                  dashboardMode={dashboardMode}
+                />
             ) : user.role === 'project_manager' ? (
               activeTab === 'profile' ? <ProjectManagerProfile />
               : activeTab === 'notifications' ? <NotificationsPage setFilteredNotificationsCount={setFilteredNotificationsCount} />

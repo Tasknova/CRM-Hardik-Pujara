@@ -20,14 +20,12 @@ const Modal: React.FC<ModalProps> = ({
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
-    console.log('Modal isOpen changed to:', isOpen, 'title:', title);
     if (isOpen) {
       setIsAnimating(true);
     }
   }, [isOpen, title]);
 
   if (!isOpen) {
-    console.log('Modal not rendering because isOpen is false');
     return null;
   }
 

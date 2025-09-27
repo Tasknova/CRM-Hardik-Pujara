@@ -37,8 +37,9 @@ export const authService = {
         throw new Error('Invalid email or password');
       }
 
-      // For demo: accept any password with at least 6 characters
-      if (password.length < 6) {
+      // Verify password using proper hashing
+      const hashedPassword = btoa(password);
+      if (user.password_hash !== hashedPassword) {
         throw new Error('Invalid email or password');
       }
 
@@ -74,6 +75,7 @@ export const authService = {
           name: memberData.name,
           email: memberData.email,
           password_hash,
+          role: 'member', // Add the required role field
           phone: memberData.phone,
           department: memberData.department,
           hire_date: memberData.hire_date,
@@ -129,11 +131,24 @@ export const authService = {
   },
 
   async deleteMember(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('members')
-      .delete()
-      .eq('id', id);
-    if (error) throw new Error('Failed to delete member');
+    console.log('🔍 Attempting to delete member with ID:', id);
+    
+    const { data, error } = await supabase
+      .rpc('delete_member_with_cascade', { target_member_id: id });
+    
+    console.log('📊 Delete member response:', { data, error });
+    
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw new Error(`Failed to delete member: ${error.message}`);
+    }
+    
+    if (data && !data.success) {
+      console.error('❌ Function returned error:', data);
+      throw new Error(data.message || 'Failed to delete member');
+    }
+    
+    console.log('✅ Member deleted successfully:', data);
   },
 
   async getMembers(): Promise<Member[]> {
@@ -222,27 +237,41 @@ export const authService = {
     if (error) throw new Error('Failed to delete admin');
   },
 
+
   // Add password verification for admin
   async verifyAdminPassword(adminId: string, password: string): Promise<boolean> {
-    // In production, use bcrypt.compare
-    console.log('[DEBUG] verifyAdminPassword called with:', { adminId, password });
-    const { data: admin, error } = await supabase
-      .from('admins')
-      .select('password_hash')
-      .eq('id', adminId)
-      .single();
-    console.log('[DEBUG] Admin query result:', { admin, error });
-    if (error || !admin) {
-      console.log('[DEBUG] Admin not found or error:', error);
+    try {
+      // First, try to find the admin by ID
+      const { data: admin, error } = await supabase
+        .from('admins')
+        .select('password_hash, email')
+        .eq('id', adminId)
+        .single();
+        
+      if (error || !admin) {
+        // Fallback: try to find by email if ID lookup fails
+        const { data: adminByEmail, error: emailError } = await supabase
+          .from('admins')
+          .select('password_hash, email, id')
+          .eq('email', adminId) // In case adminId is actually an email
+          .single();
+          
+        if (emailError || !adminByEmail) {
+          return false;
+        }
+        
+        // Use the admin found by email
+        const hashedPassword = btoa(password);
+        return adminByEmail.password_hash === hashedPassword;
+      }
+      
+      // Hash the provided password using the same method as storage
+      const hashedPassword = btoa(password);
+      return admin.password_hash === hashedPassword;
+    } catch (error) {
+      console.error('Error in verifyAdminPassword:', error);
       return false;
     }
-    const hashedPassword = btoa(password);
-    console.log('[DEBUG] Password comparison:', { 
-      storedHash: admin.password_hash, 
-      computedHash: hashedPassword, 
-      match: admin.password_hash === hashedPassword 
-    });
-    return admin.password_hash === hashedPassword;
   },
 
   validateToken(token: string): boolean {
@@ -335,6 +364,11 @@ export const authService = {
   async deleteProjectManager(id: string): Promise<void> {
     const { error } = await supabase
       .rpc('delete_project_manager_cascade', { pm_id: id });
-    if (error) throw new Error('Failed to delete project manager');
+    if (error) {
+      if (error.code === '23503') {
+        throw new Error('Cannot delete project manager: This PM has associated records (projects, tasks, deals, etc.). Please remove these associations first.');
+      }
+      throw new Error(`Failed to delete project manager: ${error.message}`);
+    }
   }
 };

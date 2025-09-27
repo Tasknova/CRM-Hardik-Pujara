@@ -1,26 +1,34 @@
-import React, { useState, useRef } from 'react';
-import { Calendar, User, Trash2, CheckCircle2, AlertCircle, Pencil, Eye, Paperclip, Link, File, X } from 'lucide-react';
-import { fileUploadService } from '../../services/fileUpload';
-import { Task, TaskAttachment } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
-import { useDeleteConfirmation } from '../../hooks/useDeleteConfirmation';
+import React, { useState } from 'react';
 import Card from '../ui/Card';
-import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import Badge from '../ui/Badge';
 import Modal from '../ui/Modal';
 import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
+import { Task, Project } from '../../types';
+import { 
+  Calendar, 
+  User, 
+  Clock, 
+  AlertCircle, 
+  CheckCircle, 
+  Edit, 
+  Trash2, 
+  Eye,
+  Play,
+  Square,
+  X
+} from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
   onDelete: (id: string) => void;
-  onStatusChange: (id: string, status: Task['status']) => void;
-  onUpdate?: (id: string, updates: Partial<Task>) => void;
-  showUser?: boolean;
-  section?: 'completed' | 'today' | 'upcoming' | 'blocked'; // NEW
+  onStatusChange: (id: string, status: string) => void;
+  onUpdate: (id: string, updates: Partial<Task>) => void;
+  projects?: Project[];
+  taskType?: 'regular' | 'daily';
   members?: { id: string; name: string }[];
   admins?: { id: string; name: string }[];
   projectManagers?: { id: string; name: string }[];
-  projects?: { id: string; name: string }[];
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ 
@@ -28,414 +36,355 @@ const TaskCard: React.FC<TaskCardProps> = ({
   onDelete, 
   onStatusChange, 
   onUpdate,
-  showUser = false,
-  section, // NEW
+  projects = [],
+  taskType = 'regular',
   members = [],
   admins = [],
-  projectManagers = [],
-  projects = []
+  projectManagers = []
 }) => {
-  const { user } = useAuth();
-  const { 
-    isOpen: isDeleteModalOpen, 
-    task: taskToDelete, 
-    taskType, 
-    showDeleteConfirmation, 
-    hideDeleteConfirmation, 
-    confirmDelete 
-  } = useDeleteConfirmation();
-  // Helper to check if a date is before today
-  const isBeforeToday = (date: Date) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date < today;
-  };
-  const dueDate = new Date(task.due_date);
-  const isOverdue = isBeforeToday(dueDate) && task.status !== 'completed';
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [editData, setEditData] = useState({
     task_name: task.task_name,
     description: task.description,
-    priority: task.priority as Task['priority'],
-    status: task.status as Task['status'],
-    user_id: task.user_id,
+    status: task.status,
+    priority: task.priority,
+    due_date: task.due_date,
+    progress: task.progress || 0,
     project_id: task.project_id || '',
+    assigned_user_ids: task.assigned_user_ids || []
   });
-  const [editAttachments, setEditAttachments] = useState<TaskAttachment[]>(task.attachments || []);
-  const [urlInput, setUrlInput] = useState('');
-  const [showUrlInput, setShowUrlInput] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  // Local state for progress input
-  const [progressInput, setProgressInput] = useState(task.progress);
-  React.useEffect(() => { setProgressInput(task.progress); }, [task.progress]);
-  // Overdue warning popover state
-  const [showOverdue, setShowOverdue] = useState(false);
+  const [isReopenOpen, setIsReopenOpen] = useState(false);
+  const [newDueDate, setNewDueDate] = useState('');
 
-  // Handle progress input change
-  const handleProgressInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = Number(e.target.value);
-    if (isNaN(val)) val = 0;
-    val = Math.max(0, Math.min(100, val));
-    setProgressInput(val);
-  };
-  // Commit progress on blur or Enter
-  const commitProgress = () => {
-    if (progressInput !== task.progress && onUpdate) {
-      onUpdate(task.id, { progress: progressInput });
-    }
-  };
-  const handleProgressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      (e.target as HTMLInputElement).blur();
-    }
-  };
-
-  const getStatusVariant = (status: Task['status']) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'success';
-      case 'in_progress': return 'warning';
-      case 'pending': return 'pending';
-      case 'not_started': return 'secondary';
-      default: return 'secondary';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'in_progress': return 'bg-blue-100 text-blue-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'not_started': return 'bg-gray-100 text-gray-800';
+      case 'blocked': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-gray-100 text-gray-600';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusIcon = (status: Task['status']) => {
+  const getCardBackgroundColor = (status: string, dueDate: string) => {
+    const today = new Date();
+    const due = new Date(dueDate);
+    const isOverdue = due < today && status !== 'completed';
+    
+    if (isOverdue) return 'bg-red-100 border-red-300';
+    
     switch (status) {
-      case 'completed': return CheckCircle2;
-      case 'in_progress': return Calendar;
-      case 'not_started': return AlertCircle;
-      default: return Calendar;
+      case 'completed': return 'bg-green-100 border-green-300';
+      case 'in_progress': 
+      case 'pending': return 'bg-yellow-100 border-yellow-300';
+      case 'not_started': return 'bg-orange-100 border-orange-300';
+      case 'blocked': return 'bg-red-100 border-red-300';
+      case 'cancelled': return 'bg-gray-100 border-gray-300';
+      default: return 'bg-gray-100 border-gray-300';
     }
   };
 
-  const getPriorityVariant = (priority: Task['priority']) => {
+  const getUrgencyIndicator = (dueDate: string, status: string) => {
+    if (status === 'completed') return null;
+    
+    const today = new Date();
+    const due = new Date(dueDate);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Reset time to compare only dates
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    if (due < today) {
+      return { type: 'overdue', icon: '⚠️', color: 'text-red-600', bg: 'bg-red-100' };
+    } else if (due.getTime() === today.getTime()) {
+      return { type: 'due-today', icon: '⚡', color: 'text-orange-600', bg: 'bg-orange-100' };
+    } else if (due.getTime() === tomorrow.getTime()) {
+      return { type: 'due-tomorrow', icon: '⏰', color: 'text-blue-600', bg: 'bg-blue-100' };
+    }
+    
+    return null;
+  };
+
+  const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'danger';
-      case 'high': return 'warning';
-      case 'medium': return 'secondary';
-      case 'low': return 'success';
-      default: return 'secondary';
+      case 'high': return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const getPriorityIcon = (priority: Task['priority']) => {
+  const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case 'urgent': return AlertCircle;
-      case 'high': return AlertCircle;
-      case 'medium': return Calendar;
-      case 'low': return CheckCircle2;
-      default: return Calendar;
+      case 'high': return <AlertCircle className="w-3 h-3" />;
+      case 'medium': return <Clock className="w-3 h-3" />;
+      case 'low': return <CheckCircle className="w-3 h-3" />;
+      default: return <Clock className="w-3 h-3" />;
     }
   };
 
-  const getUserName = (userId: string) => {
-    const member = members.find(m => m.id === userId);
-    const admin = admins.find(a => a.id === userId);
-    const pm = projectManagers.find(p => p.id === userId);
-    return member?.name || admin?.name || pm?.name || 'Unknown User';
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
   };
-
-  const getProjectName = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
-    return project?.name || 'Unknown Project';
-  };
-
-  const StatusIcon = getStatusIcon(task.status);
-  const PriorityIcon = getPriorityIcon(task.priority);
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
     setEditData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [name]: name === 'progress' ? parseInt(value) || 0 : value
     }));
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onUpdate) {
-      onUpdate(task.id, { ...editData, attachments: editAttachments });
-    }
+    onUpdate(task.id, editData);
     setIsEditOpen(false);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && user) {
-      for (const file of Array.from(files)) {
-        let tempAttachment: TaskAttachment | null = null;
-        try {
-          // Validate file
-          const validation = fileUploadService.validateFile(file);
-          if (!validation.isValid) {
-            alert(validation.error);
-            continue;
-          }
-
-          // Show loading state
-          tempAttachment = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: file.name,
-            url: URL.createObjectURL(file), // Temporary URL for preview
-            type: 'file',
-            file_type: file.type,
-            size: file.size,
-            uploaded_at: new Date().toISOString()
-          };
-          setEditAttachments(prev => [...prev, tempAttachment!]);
-
-          // Upload to Supabase Storage
-          const uploadedAttachment = await fileUploadService.uploadFile(file, user.id);
-          
-          // Replace temporary attachment with real one
-          setEditAttachments(prev => prev.map(att => 
-            att.id === tempAttachment!.id ? uploadedAttachment : att
-          ));
-        } catch (error) {
-          alert(`Failed to upload ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          // Remove temporary attachment if upload failed
-          if (tempAttachment) {
-            setEditAttachments(prev => prev.filter(att => att.id !== tempAttachment!.id));
-          }
-        }
-      }
+  const handleDelete = () => {
+    if (taskToDelete) {
+      onDelete(taskToDelete.id);
+      setIsDeleteModalOpen(false);
+      setTaskToDelete(null);
     }
   };
 
-  const handleUrlAdd = () => {
-    if (urlInput.trim()) {
-      const attachment = fileUploadService.createUrlAttachment(urlInput.trim());
-      setEditAttachments(prev => [...prev, attachment]);
-      setUrlInput('');
-      setShowUrlInput(false);
+  const showDeleteConfirmation = (task: Task) => {
+    setTaskToDelete(task);
+    setIsDeleteModalOpen(true);
+  };
+
+  const hideDeleteConfirmation = () => {
+    setIsDeleteModalOpen(false);
+    setTaskToDelete(null);
+  };
+
+  const confirmDelete = () => {
+    handleDelete();
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed': return <CheckCircle className="w-4 h-4" />;
+      case 'in_progress': return <Play className="w-4 h-4" />;
+      case 'pending': return <Clock className="w-4 h-4" />;
+      case 'not_started': return <Square className="w-4 h-4" />;
+      case 'blocked': return <X className="w-4 h-4" />;
+      case 'cancelled': return <X className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
     }
   };
 
-  const removeAttachment = async (id: string) => {
-    const attachment = editAttachments.find(att => att.id === id);
-    if (attachment && attachment.type === 'file') {
-      try {
-        // Delete from Supabase Storage
-        await fileUploadService.deleteFile(attachment.url);
-      } catch (error) {
-        console.error('Failed to delete file from storage:', error);
-        // Continue with removal even if storage deletion fails
-      }
+  const getStatusButtonText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Start Task';
+      case 'in_progress': return 'Complete Task';
+      case 'completed': return 'Reopen Task';
+      case 'not_started': return 'Start Task';
+      case 'blocked': return 'Unblock Task';
+      case 'cancelled': return 'Restart Task';
+      default: return 'Update Status';
     }
-    setEditAttachments(prev => prev.filter(att => att.id !== id));
   };
 
-  // Section-based border gradient and accent color
-  let borderClass = '';
-  let accentColor = '';
-  switch (section || task.status) {
-    case 'completed':
-      borderClass = 'border-2 border-green-400 bg-gradient-to-br from-green-50 to-green-100';
-      accentColor = 'border-green-500';
-      break;
-    case 'today':
-      borderClass = 'border-2 border-orange-400 bg-gradient-to-br from-orange-50 to-orange-100';
-      accentColor = 'border-orange-500';
-      break;
-    case 'upcoming':
-      borderClass = 'border-2 border-blue-400 bg-gradient-to-br from-blue-50 to-blue-100';
-      accentColor = 'border-blue-500';
-      break;
-    case 'blocked':
-      borderClass = 'border-2 border-red-400 bg-gradient-to-br from-red-50 to-red-100';
-      accentColor = 'border-red-500';
-      break;
-    case 'in_progress':
-      borderClass = 'border-2 border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100';
-      accentColor = 'border-yellow-500';
-      break;
-    case 'pending':
-      borderClass = 'border-2 border-purple-400 bg-gradient-to-br from-purple-50 to-purple-100';
-      accentColor = 'border-purple-500';
-      break;
-    case 'not_started':
-      accentColor = 'border-gray-400';
-      break;
-    default:
-      borderClass = '';
-      accentColor = '';
-  }
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'pending': return 'in_progress';
+      case 'in_progress': return 'completed';
+      case 'completed': return 'pending';
+      case 'not_started': return 'in_progress';
+      case 'blocked': return 'in_progress';
+      case 'cancelled': return 'pending';
+      default: return 'in_progress';
+    }
+  };
+
+  const handleStatusChange = () => {
+    const newStatus = getNextStatus(task.status);
+    onStatusChange(task.id, newStatus);
+  };
+
+  const handleReopen = () => {
+    if (newDueDate) {
+      onUpdate(task.id, {
+        status: 'pending',
+        due_date: newDueDate,
+        progress: 0
+      });
+      setIsReopenOpen(false);
+      setNewDueDate('');
+    }
+  };
+
+  // Get assigned users from assignments array only
+  const getAssignedUsers = () => {
+    if (task.assignments && task.assignments.length > 0) {
+      return task.assignments.map(assignment => assignment.member_name || 'Unknown');
+    }
+    return [];
+  };
+
+  const assignedUsers = getAssignedUsers();
+  const urgencyIndicator = getUrgencyIndicator(task.due_date, task.status);
 
   return (
     <>
-    <Card
-      className={`flex flex-col h-full w-full min-h-0 min-w-0 overflow-hidden ${borderClass} ${isOverdue && !section ? 'border-red-200 bg-red-50' : ''} group transition-all duration-200`}
-      hover
-      animated
-      accentColor={accentColor}
-      padding="md"
-    >
-        {/* Action buttons on top center */}
-        <div className="flex justify-center mb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-2 py-1 shadow-sm border border-gray-200">
-            {/* View button - always visible */}
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Eye}
-              onClick={() => setIsViewOpen(true)}
-              className="text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full"
-              title="View task details"
-            />
-            {/* Overdue warning icon */}
-              {isOverdue && section !== 'today' && (
-                <button
-                  type="button"
-                  className="p-1 rounded-full bg-red-100 hover:bg-red-200 text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300"
-                  onClick={() => setShowOverdue(v => !v)}
-                  title="Show overdue warning"
-                  tabIndex={0}
-                >
-                  <AlertCircle className="w-5 h-5" />
-                </button>
-              )}
-            {/* Edit and Delete buttons - only for authorized users */}
-          {(user?.role === 'admin' || user?.role === 'project_manager' || task.user_id === user?.id) && onUpdate && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Pencil}
-              onClick={() => setIsEditOpen(true)}
-              className="text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full"
-                title="Edit task"
-              />
-            )}
-            {(user?.role === 'admin' || user?.role === 'project_manager' || task.user_id === user?.id) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={Trash2}
-                onClick={() => showDeleteConfirmation(task, 'regular', () => onDelete(task.id))}
-                className="text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full"
-                title="Delete task"
-            />
-          )}
-        </div>
-        </div>
-
-        {/* Overdue warning popover */}
-        {isOverdue && section !== 'today' && showOverdue && (
-          <div className="absolute top-10 right-0 z-20 bg-red-100 border border-red-300 rounded shadow p-2 text-sm text-red-700 w-48 max-w-xs overflow-hidden">
-            <div className="flex items-center">
-              <AlertCircle className="w-4 h-4 mr-1 flex-shrink-0" />
-              <span className="truncate">This task is overdue</span>
-            </div>
+      <Card className={`p-6 hover:shadow-lg transition-shadow duration-200 border-2 h-full w-full flex flex-col relative ${getCardBackgroundColor(task.status, task.due_date)}`}>
+        {/* Urgency Indicator - Top Right */}
+        {urgencyIndicator && (
+          <div className={`absolute top-2 right-2 ${urgencyIndicator.bg} ${urgencyIndicator.color} px-2 py-1 rounded-full text-sm font-medium`}>
+            <span>{urgencyIndicator.icon}</span>
           </div>
         )}
 
-        {/* Task title and description */}
-        <div className="mb-4">
-          <h3 className="font-semibold text-lg text-gray-900 mb-1 group-hover:text-blue-700 transition-colors duration-200 truncate">{task.task_name}</h3>
-          <p className="text-sm text-gray-600 mb-1 line-clamp-2 break-words">{task.description}</p>
-          {task.project_id && projects && projects.length > 0 && (
-            <div className="text-xs text-blue-700 mt-1 truncate">
-              Project: {projects.find(p => p.id === task.project_id)?.name || 'Unknown Project'}
+        {/* Top Icons - Centered */}
+        <div className="flex justify-center items-center mb-4">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsViewOpen(true)}
+              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition-colors duration-200"
+              title="View Task"
+            >
+              <Eye className="w-5 h-5" />
+            </button>
+            {task.status !== 'completed' && (
+                <button
+                onClick={() => setIsEditOpen(true)}
+                className="p-2 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-full transition-colors duration-200"
+                title="Edit Task"
+              >
+                <Edit className="w-5 h-5" />
+                </button>
+              )}
+            {task.status === 'completed' && (
+              <button
+                onClick={() => setIsReopenOpen(true)}
+                className="p-2 text-orange-600 hover:text-orange-800 hover:bg-orange-100 rounded-full transition-colors duration-200"
+                title="Reopen Task"
+              >
+                <Play className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              onClick={() => showDeleteConfirmation(task)}
+              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full transition-colors duration-200"
+              title="Delete Task"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+        </div>
+        </div>
+
+        {/* Title - Bold */}
+        <div className="text-center mb-3">
+          <h3 className="text-lg font-bold text-gray-900 line-clamp-2 overflow-hidden">
+            {task.task_name}
+          </h3>
             </div>
+
+        {/* Description - Small size */}
+        {task.description && (
+          <div className="text-center mb-4">
+            <p className="text-sm text-gray-600 line-clamp-2 overflow-hidden">
+              {task.description}
+            </p>
+          </div>
+        )}
+
+        {/* Main Content - Flex grow to fill space */}
+        <div className="flex-grow flex flex-col justify-between">
+          {/* Due Date and Assigned To */}
+          <div className="space-y-3">
+            {/* Due Date */}
+            <div className="flex items-center justify-center">
+              <Calendar className="w-4 h-4 text-gray-500 mr-2" />
+              <span className="text-sm text-gray-700">{formatDate(task.due_date)}</span>
+            </div>
+
+            {/* Assigned To - Only from assignments array */}
+            <div className="flex items-center justify-center">
+              <User className="w-4 h-4 text-gray-500 mr-2" />
+              <div className="flex flex-wrap gap-1 justify-center">
+                {assignedUsers.length > 0 ? (
+                  assignedUsers.map((userName, index) => (
+                    <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      {userName}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">
+                    Unassigned
+                  </span>
           )}
       </div>
+            </div>
+          </div>
 
-      <div className="flex items-center justify-between mb-2">
-        <div className="w-full">
-          <div className="text-sm text-gray-700 mb-1 flex items-center">
-            <span className="font-semibold mr-1">Due Date:</span>
-            <Calendar className="w-4 h-4 mr-1" />
-            {new Date(task.due_date).toLocaleDateString()}
-          </div>
-          <div className="text-sm text-gray-700 mb-1 flex items-center">
-            <span className="font-semibold mr-1">Status:</span>
-            <Badge variant={getStatusVariant(task.status)} className="px-3 py-1 text-base font-semibold shadow-sm animate-pulse">
-              <StatusIcon className="w-4 h-4 mr-1" />
-              {task.status}
+          {/* Status and Priority Badges */}
+          <div className="flex justify-center items-center space-x-2 mt-2">
+            <Badge className={`${getStatusColor(task.status)} px-2 py-1 text-xs font-medium`}>
+              <div className="flex items-center space-x-1">
+                {getStatusIcon(task.status)}
+                <span className="capitalize">{task.status.replace('_', ' ')}</span>
+              </div>
             </Badge>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
+              <div className="flex items-center space-x-1">
+                {getPriorityIcon(task.priority)}
+                <span className="capitalize">{task.priority}</span>
           </div>
-            <div className="text-sm text-gray-700 mb-1 flex items-center">
-              <span className="font-semibold mr-1">Priority:</span>
-              <Badge variant={getPriorityVariant(task.priority)} className="px-3 py-1 text-base font-semibold shadow-sm">
-                <PriorityIcon className="w-4 h-4 mr-1" />
-                {task.priority}
-              </Badge>
+            </span>
             </div>
  
-          {(showUser || user?.role === 'admin') ? (
-            <div className="text-sm text-gray-700 mb-1 flex items-center">
-              <span className="font-semibold mr-1">Assigned to:</span>
-              <User className="w-4 h-4 mr-1" />
-              {getUserName(task.user_id)}
+          {/* Progress Bar - Only show for in_progress tasks */}
+          {task.status === 'in_progress' && (
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-medium text-gray-700">Progress</span>
+                <span className="text-xs text-gray-600">{task.progress}%</span>
             </div>
-          ) : null}
-
-          {/* Attachments */}
-          {task.attachments && task.attachments.length > 0 && (
-            <div className="text-sm text-gray-700 mb-1">
-              <span className="font-semibold mr-1">Attachments:</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {task.attachments.map((attachment) => (
-                  <button
-                    key={attachment.id}
-                    onClick={() => window.open(attachment.url, '_blank')}
-                    className="flex items-center space-x-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition-colors"
-                    title={`Click to open ${attachment.name}`}
-                  >
-                    {attachment.type === 'file' ? (
-                      <File className="w-3 h-3" />
-                    ) : (
-                      <Link className="w-3 h-3" />
-                    )}
-                    <span className="truncate max-w-20">{attachment.name}</span>
-                  </button>
-                ))}
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${task.progress}%` }}
+                ></div>
               </div>
             </div>
           )}
-        </div>
       </div>
 
-      {/* Progress input and bar for in-progress tasks */}
-      {task.status === 'in_progress' && (user?.role === 'admin' || task.user_id === user?.id) && onUpdate && (
-        <div className="mb-3 flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600 font-medium">Progress</span>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={progressInput}
-              onChange={handleProgressInputChange}
-              onBlur={commitProgress}
-              onKeyDown={handleProgressKeyDown}
-              className="w-16 text-center border border-gray-300 rounded focus:ring-2 focus:ring-yellow-400"
-            />
-            <span className="text-xs text-gray-700 font-semibold">%</span>
-          </div>
-          <div className="relative h-2 w-full bg-yellow-100 rounded-full overflow-hidden">
-            <div
-              className="absolute left-0 top-0 h-full bg-yellow-400 transition-all duration-500"
-              style={{ width: `${progressInput}%` }}
-            ></div>
+        {/* Action Buttons - Always at bottom */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex justify-center space-x-2">
+            {task.status !== 'completed' && (
+              <button
+                onClick={() => onStatusChange(task.id, 'completed')}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 flex items-center space-x-1"
+              >
+                <CheckCircle className="w-3 h-3" />
+                <span>Complete</span>
+              </button>
+            )}
+            <button
+              onClick={handleStatusChange}
+              className={`${
+                task.status === 'completed' 
+                  ? 'bg-yellow-600 hover:bg-yellow-700' 
+                  : 'bg-blue-600 hover:bg-blue-700'
+              } text-white px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 flex items-center space-x-1`}
+            >
+              <span>{getStatusButtonText(task.status)}</span>
+            </button>
           </div>
         </div>
-      )}
-
-      {/* Complete button for all tasks except completed */}
-      {task.status !== 'completed' && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            console.log('TaskCard: Mark as Complete button clicked for task:', task.id);
-            onStatusChange(task.id, 'completed');
-          }}
-          className="w-full mt-2 text-green-700 border-green-400 hover:bg-green-50 hover:border-green-600"
-        >
-          Mark as Complete
-        </Button>
-      )}
       </Card>
 
       {/* Edit Modal */}
@@ -453,6 +402,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 required
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea
@@ -461,9 +411,27 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 onChange={handleEditChange}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  name="status"
+                  value={editData.status}
+                  onChange={handleEditChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="not_started">Not Started</option>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="blocked">Blocked</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
               <select
@@ -471,68 +439,42 @@ const TaskCard: React.FC<TaskCardProps> = ({
                 value={editData.priority}
                 onChange={handleEditChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
-                <option value="urgent">Urgent</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                name="status"
-                value={editData.status}
-                onChange={handleEditChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="pending">Pending</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-              </select>
             </div>
 
-                         {/* Assigned To field - only for admins */}
-             {user?.role === 'admin' && (
+            <div className="grid grid-cols-2 gap-4">
                <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                 <select
-                   name="user_id"
-                   value={editData.user_id}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                <input
+                  type="date"
+                  name="due_date"
+                  value={editData.due_date}
                    onChange={handleEditChange}
                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                    required
-                 >
-                   <option value="">Select Member or Admin</option>
-                   {members.length > 0 && (
-                     <optgroup label="Members">
-                       {members.map(member => (
-                         <option key={member.id} value={member.id}>{member.name}</option>
-                       ))}
-                     </optgroup>
-                   )}
-                   {admins.length > 0 && (
-                     <optgroup label="Admins">
-                       {admins.map(admin => (
-                         <option key={admin.id} value={admin.id}>{admin.name} (Admin)</option>
-                       ))}
-                     </optgroup>
-                   )}
-                   {projectManagers.length > 0 && (
-                     <optgroup label="Project Managers">
-                       {projectManagers.map(pm => (
-                         <option key={pm.id} value={pm.id}>{pm.name} (Project Manager)</option>
-                       ))}
-                     </optgroup>
-                   )}
-                 </select>
+                />
                </div>
-             )}
 
-            {/* Project field - only for admins and project managers */}
-            {(user?.role === 'admin' || user?.role === 'project_manager') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Progress (%)</label>
+                <input
+                  type="number"
+                  name="progress"
+                  value={editData.progress}
+                  onChange={handleEditChange}
+                  min="0"
+                  max="100"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Project Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
                 <select
@@ -547,114 +489,128 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   ))}
                 </select>
               </div>
-            )}
 
-            {/* Attachments Section */}
+            {/* Assignment Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Attachments
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
+              <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-3">
+                {/* Members */}
+                {members && members.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-600 mb-2">Members</h4>
+                    <div className="space-y-1">
+                      {members.map(member => (
+                        <label key={member.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={editData.assigned_user_ids.includes(member.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, member.id]
+                                }));
+                              } else {
+                                setEditData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== member.id)
+                                }));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{member.name}</span>
               </label>
-              
-              {/* Attachment Controls */}
-              <div className="flex space-x-2 mb-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center space-x-1"
-                >
-                  <Paperclip className="w-4 h-4" />
-                  <span>Upload File</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUrlInput(!showUrlInput)}
-                  className="flex items-center space-x-1"
-                >
-                  <Link className="w-4 h-4" />
-                  <span>Add URL</span>
-                </Button>
+                      ))}
+                    </div>
               </div>
+                )}
 
-              {/* Hidden file input */}
+                {/* Admins */}
+                {admins && admins.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-600 mb-2">Admins</h4>
+                    <div className="space-y-1">
+                      {admins.map(admin => (
+                        <label key={admin.id} className="flex items-center space-x-2">
               <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileUpload}
-                className="hidden"
-                accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx"
-              />
-
-              {/* URL Input */}
-              {showUrlInput && (
-                <div className="flex space-x-2 mb-3">
-                  <input
-                    type="url"
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="Enter URL (e.g., https://example.com/document.pdf)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleUrlAdd}
-                    disabled={!urlInput.trim()}
-                  >
-                    Add
-                  </Button>
+                            type="checkbox"
+                            checked={editData.assigned_user_ids.includes(admin.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, admin.id]
+                                }));
+                              } else {
+                                setEditData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== admin.id)
+                                }));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{admin.name}</span>
+                        </label>
+                      ))}
+                    </div>
                 </div>
               )}
 
-              {/* Attachments List */}
-              {editAttachments.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-700">Attached Files:</p>
-                  {editAttachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex items-center space-x-2">
-                        {attachment.type === 'file' ? (
-                          <File className="w-4 h-4 text-blue-500" />
-                        ) : (
-                          <Link className="w-4 h-4 text-green-500" />
-                        )}
-                        <span className="text-sm text-gray-700 truncate">
-                          {attachment.name}
-                        </span>
-                        {attachment.size && (
-                          <span className="text-xs text-gray-500">
-                            ({(attachment.size / 1024).toFixed(1)} KB)
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeAttachment(attachment.id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                {/* Project Managers */}
+                {projectManagers && projectManagers.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-600 mb-2">Project Managers</h4>
+                    <div className="space-y-1">
+                      {projectManagers.map(pm => (
+                        <label key={pm.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={editData.assigned_user_ids.includes(pm.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, pm.id]
+                                }));
+                              } else {
+                                setEditData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== pm.id)
+                                }));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{pm.name}</span>
+                        </label>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
                 </div>
+              {editData.assigned_user_ids.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {editData.assigned_user_ids.length} user(s) selected
+                </p>
               )}
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+                className="px-4 py-2"
+              >
                 Cancel
               </Button>
-              <Button type="submit">
-                Save Changes
+              <Button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Update Task
               </Button>
             </div>
           </form>
@@ -678,15 +634,27 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   <Calendar className="w-5 h-5 text-gray-500 mr-3" />
                   <div>
                     <p className="text-sm font-medium text-gray-700">Due Date</p>
-                    <p className="text-sm text-gray-900">{new Date(task.due_date).toLocaleDateString()}</p>
+                    <p className="text-sm text-gray-900">{formatDate(task.due_date)}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center">
                   <User className="w-5 h-5 text-gray-500 mr-3" />
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium text-gray-700">Assigned To</p>
-                    <p className="text-sm text-gray-900">{task.user?.name || 'Unassigned'}</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {assignedUsers.length > 0 ? (
+                        assignedUsers.map((userName, index) => (
+                          <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            {userName}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -697,145 +665,125 @@ const TaskCard: React.FC<TaskCardProps> = ({
                      </div>
                      <div>
                        <p className="text-sm font-medium text-gray-700">Project</p>
-                       <p className="text-sm text-gray-900">{projects.find(p => p.id === task.project_id)?.name || 'Unknown Project'}</p>
-                     </div>
-                   </div>
-                 )}
-
-                 {task.attachments && task.attachments.length > 0 && (
-                   <div className="flex items-center">
-                     <div className="w-5 h-5 bg-purple-100 rounded mr-3 flex items-center justify-center">
-                       <Paperclip className="w-3 h-3 text-purple-600" />
-                     </div>
-                     <div>
-                       <p className="text-sm font-medium text-gray-700">Attachments</p>
-                       <p className="text-sm text-gray-900">{task.attachments.length} file(s)</p>
+                      <p className="text-sm text-gray-900">
+                        {projects.find(p => p.id === task.project_id)?.name || 'Unknown Project'}
+                      </p>
                      </div>
                    </div>
                  )}
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center">
-                  <div className="w-5 h-5 mr-3 flex items-center justify-center">
-                    <StatusIcon className="w-5 h-5" />
-                  </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">Status</p>
-                    <Badge variant={getStatusVariant(task.status)} className="mt-1">
-                      {task.status}
+                  <Badge className={`${getStatusColor(task.status)} px-2 py-1 text-xs font-medium mt-1`}>
+                    <div className="flex items-center space-x-1">
+                      {getStatusIcon(task.status)}
+                      <span className="capitalize">{task.status.replace('_', ' ')}</span>
+                    </div>
                     </Badge>
-                  </div>
                 </div>
 
-                <div className="flex items-center">
-                  <div className="w-5 h-5 mr-3 flex items-center justify-center">
-                    <PriorityIcon className="w-5 h-5" />
-                  </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">Priority</p>
-                    <Badge variant={getPriorityVariant(task.priority)} className="mt-1">
-                      {task.priority}
-                    </Badge>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)} mt-1`}>
+                    <div className="flex items-center space-x-1">
+                      {getPriorityIcon(task.priority)}
+                      <span className="capitalize">{task.priority}</span>
                   </div>
+                  </span>
                 </div>
 
-                <div className="flex items-center">
-                  <div className="w-5 h-5 bg-gray-100 rounded mr-3 flex items-center justify-center">
-                    <span className="text-xs text-gray-600 font-bold">%</span>
-                  </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700">Progress</p>
-                    {!isOverdue && (
-                      <p className="text-sm text-gray-900">{task.progress}%</p>
-                    )}
+                  <div className="mt-1">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-700">{task.progress}% Complete</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${task.progress}%` }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Attachments */}
-            {task.attachments && task.attachments.length > 0 && (
-              <div className="border-t pt-4">
-                <p className="text-sm font-medium text-gray-700 mb-3">Attachments</p>
-                <div className="space-y-2">
-                  {task.attachments.map((attachment) => (
-                    <div
-                      key={attachment.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center space-x-3">
-                        {attachment.type === 'file' ? (
-                          <File className="w-5 h-5 text-blue-500" />
-                        ) : (
-                          <Link className="w-5 h-5 text-green-500" />
-                        )}
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{attachment.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {attachment.type === 'file' && attachment.file_type && (
-                              <span>{attachment.file_type}</span>
-                            )}
-                            {attachment.type === 'file' && attachment.size && (
-                              <span> • {(attachment.size / 1024).toFixed(1)} KB</span>
-                            )}
-                            {attachment.type === 'url' && (
-                              <span>URL Link</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(attachment.url, '_blank')}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        Open
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Additional Details */}
+            {/* Task Metadata */}
             <div className="border-t pt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="font-medium text-gray-700">Created</p>
-                  <p className="text-gray-900">{new Date(task.created_at).toLocaleString()}</p>
+                  <p className="text-gray-900">{formatDate(task.created_at)}</p>
                 </div>
                 <div>
                   <p className="font-medium text-gray-700">Last Updated</p>
-                  <p className="text-gray-900">{new Date(task.updated_at).toLocaleString()}</p>
+                  <p className="text-gray-900">{formatDate(task.updated_at)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Overdue Warning */}
-            {isOverdue && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="flex items-center">
-                  <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                  <p className="text-red-700 font-medium">This task is overdue</p>
-                </div>
-              </div>
-            )}
-
             {/* Action Buttons */}
             <div className="flex justify-end space-x-3 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsViewOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsViewOpen(false)}
+                className="px-4 py-2"
+              >
                 Close
               </Button>
-              {(user?.role === 'admin' || task.user_id === user?.id) && onUpdate && (
-                <Button onClick={() => {
+              <Button
+                onClick={() => {
                   setIsViewOpen(false);
                   setIsEditOpen(true);
-                }}>
+                }}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700"
+              >
                   Edit Task
                 </Button>
-              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reopen Modal */}
+      {isReopenOpen && (
+        <Modal isOpen={isReopenOpen} onClose={() => setIsReopenOpen(false)} title="Reopen Task">
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              This task will be reopened and set to "Pending" status. Please set a new due date.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">New Due Date</label>
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsReopenOpen(false);
+                  setNewDueDate('');
+                }}
+                className="px-4 py-2"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleReopen}
+                disabled={!newDueDate}
+                className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+              >
+                Reopen Task
+              </Button>
             </div>
           </div>
         </Modal>
@@ -848,8 +796,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
         onConfirm={confirmDelete}
         taskName={taskToDelete?.task_name || ''}
         taskDescription={taskToDelete?.description}
-        assignedTo={taskToDelete?.user?.name}
-        projectName={taskToDelete?.project?.name}
+        assignedTo={assignedUsers.length > 0 ? assignedUsers.join(', ') : 'Unassigned'}
+        projectName={taskToDelete?.project_id ? projects.find(p => p.id === taskToDelete?.project_id)?.name : 'No Project'}
         priority={taskToDelete?.priority}
         dueDate={taskToDelete?.due_date}
         taskType={taskType}

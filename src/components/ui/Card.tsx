@@ -25,10 +25,13 @@ const Card: React.FC<CardProps> = ({
   const animationClass = animated ? 'animate-fade-in-up' : '';
   const accentClass = accentColor ? `border-l-4 ${accentColor}` : '';
 
+  // Check if className contains a background color class
+  const hasCustomBackground = className.includes('bg-') && !className.includes('bg-white');
+  
   return (
     <div 
       className={`
-        bg-white rounded-xl shadow-sm border border-gray-200
+        ${hasCustomBackground ? '' : 'bg-white'} rounded-xl shadow-sm border border-gray-200
         ${paddingClasses[padding]}
         ${hover ? 'hover:shadow-lg hover:-translate-y-1 transition-all duration-200' : ''}
         ${animationClass}

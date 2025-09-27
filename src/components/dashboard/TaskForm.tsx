@@ -14,20 +14,22 @@ interface TaskFormProps {
   onSubmit: (task: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => void;
   initialProjectId?: string;
   availableProjects?: { id: string; name: string }[];
+  isMyTasksPage?: boolean; // New prop to distinguish My Tasks vs All Tasks
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialProjectId, availableProjects }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialProjectId, availableProjects, isMyTasksPage = false }) => {
   const { user } = useAuth();
-     const [formData, setFormData] = useState({
-     task_name: '',
-     description: '',
-     due_date: '',
-     user_id: user?.id || '',
-     project_id: initialProjectId || '',
-     priority: '' as Task['priority'],
-     status: '' as Task['status'],
-     progress: 0,
-   });
+  const [formData, setFormData] = useState({
+    task_name: '',
+    description: '',
+    due_date: '',
+    user_id: user?.id || '',
+    assigned_user_ids: (isMyTasksPage && user?.id) ? [user.id] : [] as string[],
+    project_id: initialProjectId || '',
+    priority: '' as Task['priority'],
+    status: '' as Task['status'],
+    progress: 0,
+  });
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -94,6 +96,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
         description: '',
         due_date: '',
         user_id: user?.id || '',
+        assigned_user_ids: (isMyTasksPage && user?.id) ? [user.id] : [],
         project_id: initialProjectId || '',
         priority: '' as Task['priority'],
         status: '' as Task['status'],
@@ -103,7 +106,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
       setUrlInput('');
       setShowUrlInput(false);
     }
-  }, [isOpen, user?.id, initialProjectId]);
+  }, [isOpen, user?.id, initialProjectId, isMyTasksPage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +114,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
       ...formData,
       created_by: user?.id || '',
       attachments,
+      assigned_user_ids: formData.assigned_user_ids, // Include the assigned user IDs
     };
     onSubmit(baseTask);
     // Reset form after submission
@@ -119,6 +123,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
       description: '', 
       due_date: '', 
       user_id: user?.id || '', 
+      assigned_user_ids: (isMyTasksPage && user?.id) ? [user.id] : [],
       project_id: initialProjectId || '', 
       priority: '' as Task['priority'], 
       status: '' as Task['status'], 
@@ -136,6 +141,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
       [e.target.name]: e.target.value
     }));
   };
+
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -324,7 +330,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
 
         {(user?.role === 'admin' || user?.role === 'project_manager') && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Assign To
             </label>
             {membersLoading ? (
@@ -334,36 +340,138 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
             ) : (members.length === 0 && admins.length === 0 && projectManagers.length === 0) ? (
               <div className="text-sm text-gray-500">No members, admins, or project managers found. Please add users first.</div>
             ) : (
-              <select
-                name="user_id"
-                value={formData.user_id}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select Member or Admin</option>
+              <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
                 {members.length > 0 && (
-                  <optgroup label="Members">
-                    {members.map(member => (
-                      <option key={member.id} value={member.id}>{member.name} ({member.email})</option>
-                    ))}
-                  </optgroup>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Members</h4>
+                    <div className="space-y-2">
+                    {members.map(member => {
+                      const isCurrentUser = member.id === user?.id;
+                      const shouldDisableCurrentUser = isCurrentUser && isMyTasksPage;
+                      return (
+                        <label key={member.id} className={`flex items-center space-x-3 p-2 rounded ${shouldDisableCurrentUser ? 'cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={formData.assigned_user_ids.includes(member.id)}
+                            disabled={shouldDisableCurrentUser}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, member.id]
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== member.id)
+                                }));
+                              }
+                            }}
+                            className={`w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 ${shouldDisableCurrentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          />
+                          <div className="flex-1">
+                            <span className={`text-sm font-medium ${shouldDisableCurrentUser ? 'text-gray-500' : 'text-gray-900'}`}>
+                              {member.name}
+                              {shouldDisableCurrentUser && ' (You)'}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-2">({member.email})</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    </div>
+                  </div>
                 )}
+                
                 {admins.length > 0 && (
-                  <optgroup label="Admins">
-                    {admins.map(admin => (
-                      <option key={admin.id} value={admin.id}>{admin.name} ({admin.email}) - Admin</option>
-                    ))}
-                  </optgroup>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Admins</h4>
+                    <div className="space-y-2">
+                    {admins.map(admin => {
+                      const isCurrentUser = admin.id === user?.id;
+                      const shouldDisableCurrentUser = isCurrentUser && isMyTasksPage;
+                      return (
+                        <label key={admin.id} className={`flex items-center space-x-3 p-2 rounded ${shouldDisableCurrentUser ? 'cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={formData.assigned_user_ids.includes(admin.id)}
+                            disabled={shouldDisableCurrentUser}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, admin.id]
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== admin.id)
+                                }));
+                              }
+                            }}
+                            className={`w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 ${shouldDisableCurrentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          />
+                          <div className="flex-1">
+                            <span className={`text-sm font-medium ${shouldDisableCurrentUser ? 'text-gray-500' : 'text-gray-900'}`}>
+                              {admin.name}
+                              {shouldDisableCurrentUser && ' (You)'}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-2">({admin.email}) - Admin</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    </div>
+                  </div>
                 )}
+                
                 {projectManagers.length > 0 && (
-                  <optgroup label="Project Managers">
-                    {projectManagers.map(pm => (
-                      <option key={pm.id} value={pm.id}>{pm.name} ({pm.email}) - Project Manager</option>
-                    ))}
-                  </optgroup>
+                  <div className="mb-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Project Managers</h4>
+                    <div className="space-y-2">
+                    {projectManagers.map(pm => {
+                      const isCurrentUser = pm.id === user?.id;
+                      const shouldDisableCurrentUser = isCurrentUser && isMyTasksPage;
+                      return (
+                        <label key={pm.id} className={`flex items-center space-x-3 p-2 rounded ${shouldDisableCurrentUser ? 'cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={formData.assigned_user_ids.includes(pm.id)}
+                            disabled={shouldDisableCurrentUser}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: [...prev.assigned_user_ids, pm.id]
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  assigned_user_ids: prev.assigned_user_ids.filter(id => id !== pm.id)
+                                }));
+                              }
+                            }}
+                            className={`w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 ${shouldDisableCurrentUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          />
+                          <div className="flex-1">
+                            <span className={`text-sm font-medium ${shouldDisableCurrentUser ? 'text-gray-500' : 'text-gray-900'}`}>
+                              {pm.name}
+                              {shouldDisableCurrentUser && ' (You)'}
+                            </span>
+                            <span className="text-xs text-gray-500 ml-2">({pm.email}) - Project Manager</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    </div>
+                  </div>
                 )}
-              </select>
+              </div>
+            )}
+            {formData.assigned_user_ids.length > 0 && (
+              <div className="mt-2 text-sm text-gray-600">
+                Selected: {formData.assigned_user_ids.length} user(s)
+              </div>
             )}
           </div>
         )}

@@ -73,6 +73,18 @@ export interface Task {
   project?: Project;
   progress: number; // 0-100
   attachments?: TaskAttachment[];
+  assigned_user_ids?: string[];
+  assignments?: TaskAssignment[];
+}
+
+export interface TaskAssignment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  assigned_at: string;
+  assigned_by: string;
+  member_name?: string;
+  member_email?: string;
 }
 
 export interface Leave {
@@ -141,6 +153,9 @@ export interface DailyTask {
   project?: Project;
   user?: Member;
   created_by_user?: Member | null;
+  assigned_user_ids?: string[];
+  assignments?: TaskAssignment[];
+  skip_reason?: string;
 }
 
 export interface DailyTaskFilters {
@@ -176,4 +191,6 @@ export interface DeletedTask {
   task_type: 'regular' | 'daily';
   task_date?: string;
   is_active?: boolean;
+  assigned_user_ids?: string[];
+  assignments?: TaskAssignment[];
 }

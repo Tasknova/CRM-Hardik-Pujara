@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Task, TaskFilters } from '../types';
 import { deletedTasksService } from '../services/deletedTasks';
 import { useAuth } from '../contexts/AuthContext';
+import { handleTaskCompletion, handleTaskReopening, syncTaskStatusWithStage } from '../services/stageCompletion';
 
 export const useRealtimeTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -14,30 +15,36 @@ export const useRealtimeTasks = () => {
     if (!tasks.length) return [];
     
     try {
-      // Get unique user IDs from tasks
-      const userIds = [...new Set(tasks.map(task => task.user_id))];
+      // Get unique user IDs from tasks (both primary user_id and assigned_user_ids)
+      // Don't filter out any IDs here - let the database query handle it
+      const primaryUserIds = [...new Set(tasks.map(task => task.user_id).filter(id => id))];
+      const assignedUserIds = [...new Set(tasks.flatMap(task => task.assigned_user_ids || []))];
+      const allUserIds = [...new Set([...primaryUserIds, ...assignedUserIds])];
       
-      // Fetch members, admins, and project managers
+      
+      
+      // Fetch members, admins, and project managers for all user IDs
       const [membersData, adminsData, projectManagersData] = await Promise.all([
         supabase
           .from('members')
           .select('id, name, email, avatar_url')
-          .in('id', userIds)
+          .in('id', allUserIds)
           .eq('is_active', true),
         supabase
           .from('admins')
           .select('id, name, email, avatar_url')
-          .in('id', userIds)
+          .in('id', allUserIds)
           .eq('is_active', true),
         supabase
           .from('project_managers')
           .select('id, name, email, avatar_url')
-          .in('id', userIds)
+          .in('id', allUserIds)
           .eq('is_active', true)
       ]);
 
       // Combine members, admins, and project managers into a single map
       const userMap = new Map();
+      
       
       if (membersData.data) {
         membersData.data.forEach(member => {
@@ -56,18 +63,43 @@ export const useRealtimeTasks = () => {
           userMap.set(pm.id, { ...pm, role: 'project_manager' });
         });
       }
+      
 
-      // Attach user data to tasks
-      return tasks.map(task => ({
-        ...task,
-        user: userMap.get(task.user_id) || null
-      }));
+      // Attach user data to tasks and create assignments from assigned_user_ids JSONB
+      return tasks.map(task => {
+        let assignments = [];
+        
+        // Create assignments from assigned_user_ids JSONB column
+        if (task.assigned_user_ids && Array.isArray(task.assigned_user_ids)) {
+          const validUserIds = task.assigned_user_ids.filter((userId: string) => userId);
+          
+          assignments = validUserIds.map((userId: string) => {
+            const user = userMap.get(userId);
+            return {
+              id: `${task.id}-${userId}`, // Generate a unique ID
+              task_id: task.id,
+              user_id: userId,
+              assigned_at: task.created_at, // Use task creation time
+              assigned_by: task.created_by,
+              member_name: user?.name || 'Unknown',
+              member_email: user?.email || 'Unknown'
+            };
+          });
+        }
+        
+        return {
+          ...task,
+          user: task.user_id ? userMap.get(task.user_id) || null : null,
+          assignments: assignments
+        };
+      });
     } catch (error) {
       console.error('Error fetching user data for tasks:', error);
       // Return tasks without user data if there's an error
       return tasks.map(task => ({
         ...task,
-        user: null
+        user: null,
+        assignments: []
       }));
     }
   };
@@ -127,6 +159,19 @@ export const useRealtimeTasks = () => {
       if (error) throw error;
       console.log('useRealtimeTasks: Task updated successfully:', data);
       
+      // Directly sync task status with stage status
+      if (updates.status) {
+        try {
+          const syncResult = await syncTaskStatusWithStage(id);
+          if (syncResult.stageCompleted) {
+            console.log(`✅ Stage ${syncResult.stageId} status synced with task status`);
+          }
+        } catch (syncError) {
+          console.error('Error syncing task status with stage:', syncError);
+          // Don't throw here - task update was successful, sync check is secondary
+        }
+      }
+      
       // Fetch user data for the updated task
       const tasksWithUsers = await fetchUserDataForTasks([data]);
       const taskWithUser = tasksWithUsers[0];
@@ -157,13 +202,45 @@ export const useRealtimeTasks = () => {
       // Record the deletion in deleted_tasks table
       await deletedTasksService.recordDeletedTask(taskToDelete, user.id, 'regular');
 
+      // First, try to delete any stage assignments that reference this task
+      try {
+        // Delete from rental stage assignments
+        await supabase
+          .from('rental_stage_assignments')
+          .delete()
+          .eq('task_id', id);
+
+        // Delete from builder stage assignments
+        await supabase
+          .from('builder_stage_assignments')
+          .delete()
+          .eq('task_id', id);
+      } catch (assignmentError) {
+        console.warn('Error deleting stage assignments:', assignmentError);
+        // Continue with task deletion even if assignment deletion fails
+      }
+
       // Then delete the task
       const { error } = await supabase
         .from('tasks')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        // Handle foreign key constraint violations
+        if (error.code === '23503') {
+          if (error.message.includes('rental_stage_assignments')) {
+            throw new Error('Cannot delete task: This task is assigned to a rental deal stage. Please remove the assignment first.');
+          } else if (error.message.includes('builder_stage_assignments')) {
+            throw new Error('Cannot delete task: This task is assigned to a builder deal stage. Please remove the assignment first.');
+          } else if (error.message.includes('stage_assignments')) {
+            throw new Error('Cannot delete task: This task is assigned to a deal stage. Please remove the assignment first.');
+          } else {
+            throw new Error('Cannot delete task: This task is referenced by other records. Please remove all references first.');
+          }
+        }
+        throw error;
+      }
       setTasks(prev => prev.filter(task => task.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -181,14 +258,30 @@ export const useRealtimeTasks = () => {
       if (filters.priority && task.priority !== filters.priority) return false;
       
       // Assigned To filter (check both assignee and assignedTo for compatibility)
-      if (filters.assignedTo && task.user_id !== filters.assignedTo) return false;
-      if (filters.assignee && task.user_id !== filters.assignee) return false;
+      // Check both primary assignee and multiple assignments from JSONB
+      if (filters.assignedTo) {
+        const validAssignedIds = task.assigned_user_ids?.filter(id => id) || [];
+        const isAssignedToUser = task.user_id === filters.assignedTo || 
+          validAssignedIds.includes(filters.assignedTo);
+        if (!isAssignedToUser) return false;
+      }
+      if (filters.assignee) {
+        const validAssignedIds = task.assigned_user_ids?.filter(id => id) || [];
+        const isAssignedToUser = task.user_id === filters.assignee || 
+          validAssignedIds.includes(filters.assignee);
+        if (!isAssignedToUser) return false;
+      }
       
       // Project filter
       if (filters.project && task.project_id !== filters.project) return false;
       
-      // User ID filter (for "My Tasks")
-      if (filters.userId && task.user_id !== filters.userId) return false;
+      // User ID filter (for "My Tasks") - check both primary user and assigned users
+      if (filters.userId) {
+        const validAssignedIds = task.assigned_user_ids?.filter(id => id) || [];
+        const isMyTask = task.user_id === filters.userId || 
+          validAssignedIds.includes(filters.userId);
+        if (!isMyTask) return false;
+      }
       
       // Search filter
       if (filters.search) {

@@ -59,16 +59,6 @@ export const TaskQuickStats: React.FC<TaskQuickStatsProps> = ({ tasks }) => {
 
   return (
     <Card className="p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <BarChart3 className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-800">Task Overview</h3>
-        </div>
-        <div className="text-xs text-gray-500">
-          Real-time stats
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Edit2, Save, X, CheckCircle, Clock, AlertCircle, Paperclip, Plus } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, CheckCircle, Clock, AlertCircle, Paperclip, Plus, User } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -7,6 +7,7 @@ import Badge from '../ui/Badge';
 import FileUpload from '../ui/FileUpload';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DealInfo {
   id: string;
@@ -51,6 +52,14 @@ interface StageAssignment {
   priority: string;
   attachments?: any[];
   members: TeamMember;
+  // Task details
+  task_name?: string;
+  task_status?: string;
+  task_priority?: string;
+  task_due_date?: string;
+  task_description?: string;
+  task_progress?: number;
+  task_assigned_user_ids?: string[];
 }
 
 interface BuilderDealTimelineProps {
@@ -59,6 +68,7 @@ interface BuilderDealTimelineProps {
 }
 
 const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBack }) => {
+  const { user } = useAuth();
   const [dealInfo, setDealInfo] = useState<DealInfo | null>(null);
   const [stages, setStages] = useState<DealStage[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -80,6 +90,80 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
     fetchDealData();
     fetchTeamMembers();
   }, [dealId]);
+
+  // Function to check and update stage completion status
+  const checkAndUpdateStageCompletion = async (stageId: string) => {
+    try {
+      // Get all tasks for this stage
+      const { data: stageTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('id, status')
+        .eq('project_id', dealInfo?.project_id)
+        .contains('tags', [`builder-deal-${stageId}`]);
+
+      if (tasksError) {
+        console.error('Error fetching stage tasks:', tasksError);
+        return;
+      }
+
+      if (!stageTasks || stageTasks.length === 0) {
+        return; // No tasks for this stage
+      }
+
+      // Check if all tasks are completed
+      const allCompleted = stageTasks.every(task => task.status === 'completed');
+      
+      if (allCompleted) {
+        // Update stage status to completed
+        const { error: stageError } = await supabase
+          .from('builder_deal_stages')
+          .update({
+            status: 'completed',
+            actual_end_date: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', stageId);
+
+        if (stageError) {
+          console.error('Error updating stage status:', stageError);
+        } else {
+          toast.success('Stage completed! All tasks are finished.');
+          fetchDealData(); // Refresh data
+        }
+      }
+    } catch (error) {
+      console.error('Error checking stage completion:', error);
+    }
+  };
+
+  // Real-time subscription for task status changes
+  useEffect(() => {
+    if (!dealInfo?.project_id) return;
+
+    const channel = supabase
+      .channel('task-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tasks',
+          filter: `project_id=eq.${dealInfo.project_id}`
+        },
+        (payload) => {
+          console.log('Task status changed:', payload);
+          // Check all stages for completion when any task status changes
+          stages.forEach(stage => {
+            checkAndUpdateStageCompletion(stage.id);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dealInfo?.project_id, stages]);
 
   const fetchDealData = async () => {
     try {
@@ -123,7 +207,17 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
           .from('builder_stage_assignments')
           .select(`
             *,
-            members!builder_stage_assignments_member_id_fkey (id, name, email, role, department)
+            members!builder_stage_assignments_member_id_fkey (id, name, email, role, department),
+            tasks!builder_stage_assignments_task_id_fkey(
+              id,
+              task_name,
+              status,
+              priority,
+              due_date,
+              description,
+              progress,
+              assigned_user_ids
+            )
           `)
           .in('stage_id', (stagesData || []).map(s => s.id));
 
@@ -236,30 +330,28 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
       const currentMemberIds = currentAssignments.map(a => a.member_id);
       const newMemberIds = editForm.assigned_members;
       
-      // Remove unassigned members
-      const membersToRemove = currentMemberIds.filter(id => !newMemberIds.includes(id));
-      if (membersToRemove.length > 0) {
+      // Remove ALL existing assignments for this stage
+      if (currentAssignments.length > 0) {
         await supabase
           .from('builder_stage_assignments')
           .delete()
-          .eq('stage_id', stageId)
-          .in('member_id', membersToRemove);
+          .eq('stage_id', stageId);
       }
 
-      // Add newly assigned members
-      const membersToAdd = newMemberIds.filter(id => !currentMemberIds.includes(id));
-      
-      for (const memberId of membersToAdd) {
-        const member = dealTeamMembers.find(m => m.id === memberId);
+      // Create a single task for all selected members (if any members selected)
+      if (newMemberIds.length > 0) {
         const stage = stages.find(s => s.id === stageId);
         
-        if (member && stage && dealInfo) {
-          // Create task for the member
+        if (stage && dealInfo) {
+          console.log('Creating task for members:', newMemberIds);
+
+          // Create task with all selected members
           const { data: taskData, error: taskError } = await supabase
             .from('tasks')
             .insert([{
-              user_id: memberId,
-              created_by: memberId, // Should be current user
+              user_id: newMemberIds[0], // Use first member as primary assignee (required by trigger)
+              assigned_user_ids: newMemberIds, // All selected members as JSON array
+              created_by: newMemberIds[0], // Use first member as creator (required by trigger)
               task_name: `${dealInfo.project_name} - ${stage.stage_name}`,
               description: `Complete ${stage.stage_name} for ${dealInfo.deal_type} builder purchase deal: ${dealInfo.project_name}.\n\nBuilder: ${dealInfo.builder_name}\nClient: ${dealInfo.client_name}\nProperty: ${dealInfo.property_address}\n\nStage Details: ${stage.stage_name}`,
               due_date: editForm.estimated_date || null,
@@ -270,28 +362,32 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
               estimated_hours: 4,
               attachments: editForm.attachments
             }])
-            .select().single();
+            .select()
+            .single();
 
           if (taskError) {
             console.error('Error creating task:', taskError);
-            toast.error(`Failed to create task for ${member.name}`);
-            continue;
-          }
-
-          // Create stage assignment
-          const { error: assignmentError } = await supabase
-            .from('builder_stage_assignments')
-            .insert([{
+            toast.error(`Failed to create task: ${taskError.message}`);
+          } else {
+            console.log('Task created successfully:', taskData);
+            
+            // Create ONE stage assignment for the stage (not per member)
+            const assignment = {
               stage_id: stageId,
-              member_id: memberId,
+              member_id: newMemberIds[0], // Use first member as primary
               task_id: taskData.id,
               priority: editForm.priority,
               attachments: editForm.attachments
-            }]);
+            };
 
-          if (assignmentError) {
-            console.error('Error creating stage assignment:', assignmentError);
-            toast.error(`Failed to assign stage to ${member.name}`);
+            const { error: assignmentError } = await supabase
+              .from('builder_stage_assignments')
+              .insert([assignment]);
+
+            if (assignmentError) {
+              console.error('Error creating assignments:', assignmentError);
+              toast.error('Failed to create stage assignments');
+            }
           }
         }
       }
@@ -510,8 +606,98 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                               {stageAssignments[stage.id].map(assignment => (
                                 <Badge key={assignment.id} className="bg-blue-100 text-blue-800">
                                   {assignment.members.name}
+                                  {assignment.task_id && (
+                                    <span className="ml-1 text-green-600" title="Task created">✓</span>
+                                  )}
                                 </Badge>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Task Details */}
+                        {stageAssignments[stage.id] && stageAssignments[stage.id].some(a => a.task_id) && (
+                          <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                            <div className="text-xs font-medium text-gray-700 mb-2">Associated Tasks:</div>
+                            <div className="space-y-2">
+                              {stageAssignments[stage.id]
+                                .filter(assignment => assignment.task_id)
+                                .map(assignment => (
+                                  <div key={assignment.task_id} className="p-3 bg-white rounded border">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="flex items-center space-x-2">
+                                        <div className={`w-2 h-2 rounded-full ${
+                                          assignment.task_status === 'completed' ? 'bg-green-500' :
+                                          assignment.task_status === 'in_progress' ? 'bg-blue-500' :
+                                          'bg-gray-400'
+                                        }`}></div>
+                                        <span className="text-sm font-medium text-gray-900">
+                                          {assignment.task_name || `Task for ${assignment.members.name}`}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <span className={`px-2 py-1 text-xs rounded-full ${
+                                          assignment.task_status === 'completed' ? 'bg-green-100 text-green-800' :
+                                          assignment.task_status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                          'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          {assignment.task_status?.replace('_', ' ').toUpperCase() || 'PENDING'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Show all assigned members from the task */}
+                                    <div className="mb-2">
+                                      <span className="text-xs font-medium text-gray-600">Assigned to:</span>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {assignment.tasks?.assigned_user_ids && assignment.tasks.assigned_user_ids.length > 0 ? (
+                                          assignment.tasks.assigned_user_ids.map((userId: string) => {
+                                            const member = dealTeamMembers.find(m => m.id === userId);
+                                            return (
+                                              <span
+                                                key={userId}
+                                                className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                                              >
+                                                <User className="w-3 h-3 mr-1" />
+                                                {member?.name || 'Unknown'}
+                                                <span className="ml-1 text-green-600">✓</span>
+                                              </span>
+                                            );
+                                          })
+                                        ) : (
+                                          <span className="text-xs text-gray-500">No members assigned</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                                      <div className="flex items-center space-x-1">
+                                        <span className="font-medium">Priority:</span>
+                                        <span className={`px-1 py-0.5 rounded text-xs ${
+                                          assignment.task_priority === 'high' ? 'bg-red-100 text-red-800' :
+                                          assignment.task_priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                          'bg-green-100 text-green-800'
+                                        }`}>
+                                          {assignment.task_priority?.toUpperCase() || 'LOW'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center space-x-1">
+                                        <span className="font-medium">Due:</span>
+                                        <span>{assignment.task_due_date ? 
+                                          new Date(assignment.task_due_date).toLocaleDateString() : 
+                                          'No due date'
+                                        }</span>
+                                      </div>
+                                    </div>
+                                    
+                                    {assignment.task_description && (
+                                      <div className="mt-2 text-xs text-gray-600">
+                                        <span className="font-medium">Description:</span>
+                                        <p className="mt-1 line-clamp-2">{assignment.task_description}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
                             </div>
                           </div>
                         )}

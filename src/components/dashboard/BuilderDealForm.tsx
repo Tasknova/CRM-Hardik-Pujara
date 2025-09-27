@@ -47,6 +47,7 @@ interface DealFormData {
   property_address: string;
   property_area: string;
   property_price: string;
+  project_manager_id?: string;
   
   // Builder information
   builder_id?: string;
@@ -94,6 +95,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     property_address: '',
     property_area: '',
     property_price: '',
+    project_manager_id: '',
     builder_id: undefined,
     builder_name: '',
     builder_location: '',
@@ -120,6 +122,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
   const [clients, setClients] = useState<Client[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loanProviders, setLoanProviders] = useState<LoanProvider[]>([]);
+  const [projectManagers, setProjectManagers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
   const [showNewBuilderModal, setShowNewBuilderModal] = useState(false);
@@ -133,6 +136,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     fetchClients();
     fetchTeamMembers();
     fetchLoanProviders();
+    fetchProjectManagers();
   }, []);
 
   // Load deal data for editing
@@ -204,6 +208,30 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     }
   };
 
+  const fetchProjectManagers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('project_managers')
+        .select('id, name, email, phone')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      
+      // Transform the data to match our expected interface
+      const transformedData = (data || []).map(pm => ({
+        id: pm.id,
+        name: pm.name,
+        email: pm.email,
+        role: 'Project Manager'
+      }));
+      
+      setProjectManagers(transformedData);
+    } catch (error) {
+      console.error('Error fetching project managers:', error);
+    }
+  };
+
   const loadDealForEdit = async () => {
     if (!editDealId) return;
     
@@ -225,6 +253,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
           property_address: data.property_address || '',
           property_area: data.property_area || '',
           property_price: data.property_price || '',
+          project_manager_id: data.project_manager_id || '',
           builder_id: data.builder_id,
           builder_name: data.builder_name || '',
           builder_location: data.builder_location || '',
@@ -438,6 +467,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
           .from('builder_deals')
           .update({
             project_name: formData.project_name,
+            project_manager_id: formData.project_manager_id || null,
             deal_type: formData.deal_type,
             property_type: formData.property_type,
             property_address: formData.property_address,
@@ -515,6 +545,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
           .insert([{
             project_id: projectData.id,
             project_name: formData.project_name,
+            project_manager_id: formData.project_manager_id || null,
             deal_type: formData.deal_type,
             property_type: formData.property_type,
             property_address: formData.property_address,
@@ -720,6 +751,22 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Project Manager
+              </label>
+              <select
+                value={formData.project_manager_id}
+                onChange={(e) => setFormData(prev => ({ ...prev, project_manager_id: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select Project Manager</option>
+                {projectManagers.map(pm => (
+                  <option key={pm.id} value={pm.id}>{pm.name}</option>
+                ))}
+              </select>
             </div>
           </div>
 

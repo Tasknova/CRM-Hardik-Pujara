@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, Building, Calendar, Plus, Trash2, Edit2, Crown, Eye } from 'lucide-react';
+import { User, Mail, Phone, Building, Calendar, Plus, Trash2, Edit2, Crown, Eye, MoreVertical } from 'lucide-react';
 import { Member, ProjectManager } from '../../types';
 import { authService } from '../../services/auth';
 import Button from '../ui/Button';
@@ -131,13 +131,11 @@ const MembersList: React.FC = () => {
       setDeleteConfirm(false);
       setSelectedMember(null);
       loadMembers();
+      // Show success message
+      alert(`Member "${selectedMember.name}" has been successfully deleted. Tasks and comments were removed, other records were preserved.`);
     } catch (err: any) {
       console.error('Error deleting member:', err);
-      if (err.message && (err.message.includes('foreign key constraint') || err.message.includes('violates foreign key constraint'))) {
-        setError(`Cannot delete member "${selectedMember.name}" because they have associated tasks, projects, or deals. Please remove these associations first.`);
-      } else {
-        setError('Failed to delete member');
-      }
+      setError(`Failed to delete member: ${err.message}`);
     }
   };
 
@@ -182,78 +180,93 @@ const MembersList: React.FC = () => {
       {/* Project Managers Section */}
       {projectManagers.length > 0 && (
         <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-6">
             <Crown className="w-5 h-5 text-purple-600" />
             <h3 className="text-lg font-semibold text-gray-900">Project Managers</h3>
             <Badge variant="secondary" className="text-xs">
               {projectManagers.length} PM{projectManagers.length !== 1 ? 's' : ''}
             </Badge>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {projectManagers.map((pm) => (
               <Card
                 key={pm.id}
-                hover
-                className="relative cursor-pointer border-purple-200 bg-gradient-to-br from-purple-50 to-white"
-                onClick={() => handleProjectManagerClick(pm)}
+                className="relative group border border-purple-200 bg-gradient-to-br from-purple-50 to-white hover:shadow-lg transition-all duration-200"
               >
-                <div className="absolute top-2 right-2">
-                  <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                    PM
-                  </Badge>
-                </div>
-                {/* Action buttons for PMs */}
+                {/* Action buttons - top right */}
                 {!isProjectManager && (
-                  <div className="absolute top-2 left-2 flex gap-1">
+                  <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <button
-                      title="View PM"
-                      className="bg-white border p-1 shadow rounded hover:bg-gray-50"
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleProjectManagerClick(pm);
-                      }}
+                      title="View Details"
+                      className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                      onClick={() => handleProjectManagerClick(pm)}
                     >
                       <Eye className="w-4 h-4 text-blue-600" />
                     </button>
                     <button
                       title="Edit PM"
-                      className="bg-white border p-1 shadow rounded hover:bg-gray-50"
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleEditProjectManager(pm);
-                      }}
+                      className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                      onClick={() => handleEditProjectManager(pm)}
                     >
                       <Edit2 className="w-4 h-4 text-gray-600" />
                     </button>
                     <button
                       title="Delete PM"
-                      className="bg-white border p-1 shadow rounded hover:bg-gray-50"
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleDeleteProjectManagerConfirm(pm);
-                      }}
+                      className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-red-50 hover:border-red-300 transition-colors"
+                      onClick={() => handleDeleteProjectManagerConfirm(pm)}
                     >
                       <Trash2 className="w-4 h-4 text-red-600" />
                     </button>
                   </div>
                 )}
-                <div className="text-center">
-                  <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-purple-100 overflow-hidden">
+                
+                {/* PM Badge */}
+                <div className="absolute top-3 left-3">
+                  <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700 border-purple-200">
+                    PM
+                  </Badge>
+                </div>
+
+                {/* Card Content */}
+                <div className="pt-8 pb-6 px-6 text-center">
+                  {/* Avatar */}
+                  <div className="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center bg-purple-100 overflow-hidden ring-4 ring-purple-100">
                     {pm.avatar_url ? (
-                      <img src={pm.avatar_url} alt="Profile" className="w-16 h-16 object-cover rounded-full" />
+                      <img src={pm.avatar_url} alt="Profile" className="w-20 h-20 object-cover rounded-full" />
                     ) : (
-                      <Crown className="w-8 h-8 text-purple-500" />
+                      <Crown className="w-10 h-10 text-purple-500" />
                     )}
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{pm.name}</h3>
-                  <div className="space-y-1 text-sm text-gray-700">
-                    <div>{pm.email}</div>
-                    {pm.phone && <div>{pm.phone}</div>}
-                    {pm.department && <div>{pm.department}</div>}
-                    {pm.hire_date && <div>Joined {new Date(pm.hire_date).toLocaleDateString()}</div>}
+                  
+                  {/* Name and Title */}
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">{pm.name}</h3>
+                  <p className="text-sm text-gray-600 mb-3 truncate">{pm.email}</p>
+                  
+                  {/* Details */}
+                  <div className="space-y-2 text-sm text-gray-600">
+                    {pm.phone && (
+                      <div className="flex items-center justify-center gap-1">
+                        <Phone className="w-3 h-3" />
+                        <span className="truncate">{pm.phone}</span>
+                      </div>
+                    )}
+                    {pm.department && (
+                      <div className="flex items-center justify-center gap-1">
+                        <Building className="w-3 h-3" />
+                        <span className="truncate">{pm.department}</span>
+                      </div>
+                    )}
+                    {pm.hire_date && (
+                      <div className="flex items-center justify-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        <span>Joined {new Date(pm.hire_date).toLocaleDateString()}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-2">
-                    <Badge variant={pm.is_active ? 'success' : 'secondary'}>
+                  
+                  {/* Status Badge */}
+                  <div className="mt-4">
+                    <Badge variant={pm.is_active ? 'success' : 'secondary'} className="text-xs">
                       {pm.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
@@ -266,76 +279,86 @@ const MembersList: React.FC = () => {
 
       {/* Team Members Section */}
       <div>
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-6">
           <User className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold text-gray-900">Team Members</h3>
           <Badge variant="secondary" className="text-xs">
             {members.length} Member{members.length !== 1 ? 's' : ''}
           </Badge>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {members.map((member) => (
             <Card
               key={member.id}
-              hover
-              className="relative cursor-pointer"
-              onClick={() => handleMemberClick(member)}
+              className="relative group border border-gray-200 bg-white hover:shadow-lg transition-all duration-200"
             >
-              {member.department !== undefined && (
-                <>
-                  {!isProjectManager && (
-                    <div className="absolute top-2 left-2 flex gap-1">
-                      <button
-                        title="View Member"
-                        className="bg-white border p-1 shadow rounded hover:bg-gray-50"
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleMemberClick(member);
-                        }}
-                      >
-                        <Eye className="w-4 h-4 text-blue-600" />
-                      </button>
-                      <button
-                        title="Edit Member"
-                        className="bg-white border p-1 shadow rounded hover:bg-gray-50"
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleEditMember(member);
-                        }}
-                      >
-                        <Edit2 className="w-4 h-4 text-gray-600" />
-                      </button>
-                      <button
-                        title="Delete Member"
-                        className="bg-white border p-1 shadow rounded hover:bg-gray-50"
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleDeleteConfirm(member);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
+              {/* Action buttons - top right */}
+              {!isProjectManager && (
+                <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <button
+                    title="View Details"
+                    className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    onClick={() => handleMemberClick(member)}
+                  >
+                    <Eye className="w-4 h-4 text-blue-600" />
+                  </button>
+                  <button
+                    title="Edit Member"
+                    className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                    onClick={() => handleEditMember(member)}
+                  >
+                    <Edit2 className="w-4 h-4 text-gray-600" />
+                  </button>
+                  <button
+                    title="Delete Member"
+                    className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-red-50 hover:border-red-300 transition-colors"
+                    onClick={() => handleDeleteConfirm(member)}
+                  >
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </button>
+                </div>
+              )}
+
+              {/* Card Content */}
+              <div className="pt-6 pb-6 px-6 text-center">
+                {/* Avatar */}
+                <div className="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center bg-blue-100 overflow-hidden ring-4 ring-blue-100">
+                  {member.avatar_url ? (
+                    <img src={member.avatar_url} alt="Profile" className="w-20 h-20 object-cover rounded-full" />
+                  ) : (
+                    <User className="w-10 h-10 text-blue-500" />
+                  )}
+                </div>
+                
+                {/* Name and Title */}
+                <h3 className="text-lg font-semibold text-gray-900 mb-1 truncate">{member.name}</h3>
+                <p className="text-sm text-gray-600 mb-3 truncate">{member.email}</p>
+                
+                {/* Details */}
+                <div className="space-y-2 text-sm text-gray-600">
+                  {member.phone && (
+                    <div className="flex items-center justify-center gap-1">
+                      <Phone className="w-3 h-3" />
+                      <span className="truncate">{member.phone}</span>
                     </div>
                   )}
-                </>
-              )}
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center bg-gray-100 overflow-hidden">
-                  {member.avatar_url ? (
-                    <img src={member.avatar_url} alt="Profile" className="w-16 h-16 object-cover rounded-full" />
-                  ) : (
-                    <User className="w-8 h-8 text-gray-500" />
+                  {member.department && (
+                    <div className="flex items-center justify-center gap-1">
+                      <Building className="w-3 h-3" />
+                      <span className="truncate">{member.department}</span>
+                    </div>
+                  )}
+                  {member.hire_date && (
+                    <div className="flex items-center justify-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      <span>Joined {new Date(member.hire_date).toLocaleDateString()}</span>
+                    </div>
                   )}
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">{member.name}</h3>
-                <div className="space-y-1 text-sm text-gray-700">
-                  <div>{member.email}</div>
-                  {member.phone && <div>{member.phone}</div>}
-                  {member.department && <div>{member.department}</div>}
-                  {member.hire_date && <div>Joined {new Date(member.hire_date).toLocaleDateString()}</div>}
-                </div>
-                <div className="mt-2">
-                  <Badge variant={member.is_active ? 'success' : 'secondary'}>
+                
+                {/* Status Badge */}
+                <div className="mt-4">
+                  <Badge variant={member.is_active ? 'success' : 'secondary'} className="text-xs">
                     {member.is_active ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
@@ -482,17 +505,60 @@ const MembersList: React.FC = () => {
           isOpen={deleteConfirm} 
           onClose={() => setDeleteConfirm(false)} 
           title={`Delete ${selectedProjectManager ? 'Project Manager' : 'Member'}`}
+          size="lg"
         >
-          <div>
-            Are you sure you want to delete {selectedMember?.name || selectedProjectManager?.name}?
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">
+                    Warning: This action cannot be undone
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    <p>Deleting <strong>{selectedMember?.name || selectedProjectManager?.name}</strong> will:</p>
+                    <div className="mt-2">
+                      <p className="font-medium text-red-800">Permanently remove:</p>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>All tasks assigned to this member</li>
+                        <li>All daily tasks assigned to this member</li>
+                        <li>All task comments by this member</li>
+                        <li>All leave balances and records</li>
+                        <li>All audit logs and sessions</li>
+                      </ul>
+                    </div>
+                    <div className="mt-3">
+                      <p className="font-medium text-orange-800">Preserve but update:</p>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>Deals created by this member (creator will be set to null)</li>
+                        <li>Team assignments will be removed (deals preserved)</li>
+                        <li>Stage assignments will be removed (stages preserved)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-sm text-gray-600">
+              <p>This action will cascade delete all associated records. Are you absolutely sure you want to proceed?</p>
+            </div>
           </div>
-          <div className="flex justify-end space-x-2 mt-4">
-            <Button variant="outline" onClick={() => setDeleteConfirm(false)}>Cancel</Button>
+          
+          <div className="flex justify-end space-x-3 mt-6">
+            <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
+              Cancel
+            </Button>
             <Button 
               variant="danger" 
               onClick={selectedProjectManager ? handleDeleteProjectManager : handleDelete}
+              className="bg-red-600 hover:bg-red-700"
             >
-              Delete
+              Yes, Delete Permanently
             </Button>
           </div>
         </Modal>

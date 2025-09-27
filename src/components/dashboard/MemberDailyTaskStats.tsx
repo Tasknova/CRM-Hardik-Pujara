@@ -49,7 +49,12 @@ export const MemberDailyTaskStats: React.FC<MemberDailyTaskStatsProps> = ({
         : allUsers;
 
       const stats = usersToShow.map(user => {
-        const userTasks = dailyTasks.filter(task => task.user_id === user.id);
+        // Filter tasks where user is either primary assignee or in assigned_user_ids
+        const userTasks = dailyTasks.filter(task => {
+          const isPrimaryAssignee = task.user_id === user.id;
+          const isAssignedUser = task.assigned_user_ids && task.assigned_user_ids.includes(user.id);
+          return isPrimaryAssignee || isAssignedUser;
+        });
         
         return {
           id: user.id,
