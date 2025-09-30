@@ -47,6 +47,16 @@ interface StageAssignment {
   task_due_date?: string;
   task_description?: string;
   task_progress?: number;
+  tasks?: {
+    id: string;
+    task_name: string;
+    status: string;
+    priority: string;
+    due_date: string;
+    description: string;
+    progress: number;
+    assigned_user_ids: string[];
+  };
 }
 
 interface DealInfo {
@@ -214,7 +224,9 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
               task_priority: assignment.tasks?.priority,
               task_due_date: assignment.tasks?.due_date,
               task_description: assignment.tasks?.description,
-              task_progress: assignment.tasks?.progress
+              task_progress: assignment.tasks?.progress,
+              // Include full tasks object with assigned_user_ids
+              tasks: assignment.tasks
             });
           });
           
@@ -944,29 +956,6 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                                       </div>
                                     )}
                                     
-                                    {/* Show assigned users from task's assigned_user_ids - using same logic as main tasks page */}
-                                    {assignment.tasks?.assigned_user_ids && Array.isArray(assignment.tasks.assigned_user_ids) && assignment.tasks.assigned_user_ids.length > 0 && (
-                                      <div className="mt-2">
-                                        <span className="text-xs font-medium text-gray-600">Assigned to:</span>
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                          {assignment.tasks.assigned_user_ids
-                                            .filter((userId: string) => userId) // Filter out null/undefined values
-                                            .map((userId: string) => {
-                                              const member = teamMembers.find(m => m.id === userId);
-                                              return (
-                                                <span
-                                                  key={userId}
-                                                  className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
-                                                >
-                                                  <User className="w-3 h-3 mr-1" />
-                                                  {member?.name || 'Unknown'}
-                                                  <span className="ml-1 text-green-600">✓</span>
-                                                </span>
-                                              );
-                                            })}
-                                        </div>
-                                      </div>
-                                    )}
                                   </div>
                                 ));
                               })()}

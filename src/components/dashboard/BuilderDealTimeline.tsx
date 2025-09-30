@@ -708,29 +708,6 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                                       </div>
                                     )}
                                     
-                                    {/* Show assigned users from task's assigned_user_ids - using same logic as main tasks page */}
-                                    {assignment.tasks?.assigned_user_ids && Array.isArray(assignment.tasks.assigned_user_ids) && assignment.tasks.assigned_user_ids.length > 0 && (
-                                      <div className="mt-2">
-                                        <span className="text-xs font-medium text-gray-600">Assigned to:</span>
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                          {assignment.tasks.assigned_user_ids
-                                            .filter((userId: string) => userId) // Filter out null/undefined values
-                                            .map((userId: string) => {
-                                              const member = teamMembers.find(m => m.id === userId);
-                                              return (
-                                                <span
-                                                  key={userId}
-                                                  className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
-                                                >
-                                                  <User className="w-3 h-3 mr-1" />
-                                                  {member?.name || 'Unknown'}
-                                                  <span className="ml-1 text-green-600">✓</span>
-                                                </span>
-                                              );
-                                            })}
-                                        </div>
-                                      </div>
-                                    )}
                                   </div>
                                 ));
                               })()}
