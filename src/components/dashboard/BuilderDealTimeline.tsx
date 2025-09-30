@@ -371,7 +371,7 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
           } else {
             console.log('Task created successfully:', taskData);
             
-            // Create ONE stage assignment for the stage (not per member)
+            // Create ONE stage assignment for the primary member (to avoid duplicate tasks)
             const assignment = {
               stage_id: stageId,
               member_id: newMemberIds[0], // Use first member as primary
@@ -528,6 +528,7 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                       <input
                         type="date"
                         defaultValue={stage.estimated_date || calculatedDate || ''}
+                        min={new Date().toISOString().split('T')[0]}
                         onBlur={(e) => {
                           if (e.target.value !== (stage.estimated_date || calculatedDate)) {
                             handleQuickDateSave(stage.id, e.target.value);
@@ -620,9 +621,19 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg">
                             <div className="text-xs font-medium text-gray-700 mb-2">Associated Tasks:</div>
                             <div className="space-y-2">
-                              {stageAssignments[stage.id]
-                                .filter(assignment => assignment.task_id)
-                                .map(assignment => (
+                              {(() => {
+                                // Get unique tasks from stage assignments to avoid duplicates
+                                const uniqueTasks = new Map();
+                                
+                                stageAssignments[stage.id]
+                                  .filter(assignment => assignment.task_id)
+                                  .forEach(assignment => {
+                                    if (!uniqueTasks.has(assignment.task_id)) {
+                                      uniqueTasks.set(assignment.task_id, assignment);
+                                    }
+                                  });
+                                
+                                return Array.from(uniqueTasks.values()).map(assignment => (
                                   <div key={assignment.task_id} className="p-3 bg-white rounded border">
                                     <div className="flex items-center justify-between mb-2">
                                       <div className="flex items-center space-x-2">
@@ -696,8 +707,33 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                                         <p className="mt-1 line-clamp-2">{assignment.task_description}</p>
                                       </div>
                                     )}
+                                    
+                                    {/* Show assigned users from task's assigned_user_ids - using same logic as main tasks page */}
+                                    {assignment.tasks?.assigned_user_ids && Array.isArray(assignment.tasks.assigned_user_ids) && assignment.tasks.assigned_user_ids.length > 0 && (
+                                      <div className="mt-2">
+                                        <span className="text-xs font-medium text-gray-600">Assigned to:</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {assignment.tasks.assigned_user_ids
+                                            .filter((userId: string) => userId) // Filter out null/undefined values
+                                            .map((userId: string) => {
+                                              const member = teamMembers.find(m => m.id === userId);
+                                              return (
+                                                <span
+                                                  key={userId}
+                                                  className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                                                >
+                                                  <User className="w-3 h-3 mr-1" />
+                                                  {member?.name || 'Unknown'}
+                                                  <span className="ml-1 text-green-600">✓</span>
+                                                </span>
+                                              );
+                                            })}
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
+                                ));
+                              })()}
                             </div>
                           </div>
                         )}
@@ -734,6 +770,7 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                                 <input
                                   type="date"
                                   value={editForm.estimated_date}
+                                  min={new Date().toISOString().split('T')[0]}
                                   onChange={(e) => setEditForm(prev => ({ ...prev, estimated_date: e.target.value }))}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
@@ -760,31 +797,37 @@ const BuilderDealTimeline: React.FC<BuilderDealTimelineProps> = ({ dealId, onBac
                                 Assign to Team Members
                               </label>
                               <div className="space-y-2 max-h-40 overflow-y-auto">
-                                {dealTeamMembers.map(member => (
-                                  <label key={member.id} className="flex items-center space-x-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={editForm.assigned_members.includes(member.id)}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setEditForm(prev => ({
-                                            ...prev,
-                                            assigned_members: [...prev.assigned_members, member.id]
-                                          }));
-                                        } else {
-                                          setEditForm(prev => ({
-                                            ...prev,
-                                            assigned_members: prev.assigned_members.filter(id => id !== member.id)
-                                          }));
-                                        }
-                                      }}
-                                      className="rounded"
-                                    />
-                                    <span className="text-sm text-gray-700">
-                                      {member.name} ({member.department || member.role})
-                                    </span>
-                                  </label>
-                                ))}
+                                {teamMembers.length > 0 ? (
+                                  teamMembers.map(member => (
+                                    <label key={member.id} className="flex items-center space-x-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={editForm.assigned_members.includes(member.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setEditForm(prev => ({
+                                              ...prev,
+                                              assigned_members: [...prev.assigned_members, member.id]
+                                            }));
+                                          } else {
+                                            setEditForm(prev => ({
+                                              ...prev,
+                                              assigned_members: prev.assigned_members.filter(id => id !== member.id)
+                                            }));
+                                          }
+                                        }}
+                                        className="rounded"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        {member.name} ({member.department || member.role})
+                                      </span>
+                                    </label>
+                                  ))
+                                ) : (
+                                  <div className="text-sm text-gray-500 p-2">
+                                    No team members available. Please add team members first.
+                                  </div>
+                                )}
                               </div>
                             </div>
 

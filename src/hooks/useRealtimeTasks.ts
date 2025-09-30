@@ -9,7 +9,15 @@ export const useRealtimeTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  
+  // Safe useAuth with fallback
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext.user;
+  } catch (error) {
+    console.warn('useAuth not available in useRealtimeTasks, using null user');
+  }
 
   const fetchUserDataForTasks = async (tasks: any[]): Promise<Task[]> => {
     if (!tasks.length) return [];
@@ -134,12 +142,9 @@ export const useRealtimeTasks = () => {
 
       if (error) throw error;
       
-      // Fetch user data for the new task
-      const tasksWithUsers = await fetchUserDataForTasks([data]);
-      const taskWithUser = tasksWithUsers[0];
-      
-      setTasks(prev => [taskWithUser, ...prev]);
-      return taskWithUser;
+      // Don't add to local state here - let the real-time subscription handle it
+      // This prevents duplicate tasks from appearing
+      return data;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       throw err;

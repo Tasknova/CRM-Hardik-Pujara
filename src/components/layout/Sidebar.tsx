@@ -69,6 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'reports', label: 'Reports', icon: BarChart2 },
     { id: 'projects', label: 'Projects', icon: Folder },
     { id: 'admin-management', label: 'Admin Management', icon: Shield },
+    { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
@@ -85,6 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'projects', label: 'Projects', icon: Folder },
     { id: 'document-hub', label: 'Document Hub', icon: FileText },
     { id: 'project-managers', label: 'PM Management', icon: Users },
+    { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
@@ -108,6 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'builders', label: 'Builders', icon: Factory },
     { id: 'loan-providers', label: 'Loan Providers', icon: CreditCard },
     { id: 'project-manager-management', label: 'PM Management', icon: Users },
+    { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'admin-management', label: 'Admin Management', icon: Shield },
   ];

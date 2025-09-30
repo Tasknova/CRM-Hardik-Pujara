@@ -54,6 +54,7 @@ import OwnersPage from './OwnersPage';
 import BuildersPage from './BuildersPage';
 import LoanProvidersPage from './LoanProvidersPage';
 import DocumentHub from './DocumentHub';
+import SettingsPage from './SettingsPage';
 
 interface AdminDashboardProps {
   activeTab: string;
@@ -3006,6 +3007,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
           )}
           {activeTab === 'document-hub' && <DocumentHub />}
           {activeTab === 'project-managers' && <ProjectManagerManagement />}
+          {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'profile' && <AdminProfile />}
         </>
       )}
@@ -3433,6 +3435,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
             </div>
           )}
           {activeTab === 'admin-management' && <AdminsList />}
+          {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'profile' && <AdminProfile />}
         </>
       )}

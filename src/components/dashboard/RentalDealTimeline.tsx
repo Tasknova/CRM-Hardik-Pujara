@@ -183,7 +183,8 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
               priority,
               due_date,
               description,
-              progress
+              progress,
+              assigned_user_ids
             )
           `)
           .in('stage_id', stagesData.map(s => s.id));
@@ -418,7 +419,7 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
           } else {
             console.log('Task created successfully:', taskData);
             
-            // Create ONE stage assignment for the stage (not per member)
+            // Create ONE stage assignment for the primary member (to avoid duplicate tasks)
             const assignment = {
               stage_id: stageId,
               member_id: membersToAdd[0], // Use first member as primary
@@ -439,7 +440,7 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
         }
       }
 
-      toast.success(`Stage updated successfully. ${membersToAdd.length} task(s) created.`);
+      toast.success(`Stage updated successfully. 1 task created for ${membersToAdd.length} member(s).`);
       setEditingStage(null);
       fetchDealData(); // Refresh data
     } catch (error) {
@@ -621,6 +622,7 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                         <input
                           type="date"
                           defaultValue={stage.estimated_date || calculatedDate || ''}
+                          min={new Date().toISOString().split('T')[0]}
                           onBlur={(e) => {
                             if (e.target.value !== (stage.estimated_date || calculatedDate)) {
                               handleQuickDateSave(stage.id, e.target.value);
@@ -690,6 +692,7 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                             <input
                               type="date"
                               value={editForm.estimated_date}
+                              min={new Date().toISOString().split('T')[0]}
                               onChange={(e) => setEditForm(prev => ({ ...prev, estimated_date: e.target.value }))}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                             />
@@ -717,31 +720,37 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                             Assign to Team Members (Multiple Selection)
                           </label>
                           <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2">
-                            {dealTeamMembers.map(member => (
-                              <label key={member.id} className="flex items-center space-x-2 p-1 hover:bg-gray-50 rounded">
-                                <input
-                                  type="checkbox"
-                                  checked={editForm.assigned_members.includes(member.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setEditForm(prev => ({
-                                        ...prev,
-                                        assigned_members: [...prev.assigned_members, member.id]
-                                      }));
-                                    } else {
-                                      setEditForm(prev => ({
-                                        ...prev,
-                                        assigned_members: prev.assigned_members.filter(id => id !== member.id)
-                                      }));
-                                    }
-                                  }}
-                                  className="rounded text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700">
-                                  {member.name} ({member.role})
-                                </span>
-                              </label>
-                            ))}
+                            {teamMembers.length > 0 ? (
+                              teamMembers.map(member => (
+                                <label key={member.id} className="flex items-center space-x-2 p-1 hover:bg-gray-50 rounded">
+                                  <input
+                                    type="checkbox"
+                                    checked={editForm.assigned_members.includes(member.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setEditForm(prev => ({
+                                          ...prev,
+                                          assigned_members: [...prev.assigned_members, member.id]
+                                        }));
+                                      } else {
+                                        setEditForm(prev => ({
+                                          ...prev,
+                                          assigned_members: prev.assigned_members.filter(id => id !== member.id)
+                                        }));
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm text-gray-700">
+                                    {member.name} ({member.role})
+                                  </span>
+                                </label>
+                              ))
+                            ) : (
+                              <div className="text-sm text-gray-500 p-2">
+                                No team members available. Please add team members first.
+                              </div>
+                            )}
                           </div>
                           {editForm.assigned_members.length > 0 && (
                             <p className="text-xs text-gray-600 mt-1">
@@ -831,18 +840,38 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                           <div className="mt-2">
                             <div className="text-xs font-medium text-gray-700 mb-1">Assigned Team Members:</div>
                             <div className="flex flex-wrap gap-1">
-                              {stageAssignments[stage.id].map(assignment => (
-                                <span
-                                  key={assignment.id}
-                                  className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
-                                >
-                                  <User className="w-3 h-3 mr-1" />
-                                  {assignment.member_name}
-                                  {assignment.task_id && (
+                              {(() => {
+                                // Get all unique assigned members from both stage assignments and task assigned_user_ids
+                                const assignedMembers = new Set();
+                                
+                                // Add members from stage assignments
+                                stageAssignments[stage.id].forEach(assignment => {
+                                  assignedMembers.add(assignment.member_name);
+                                });
+                                
+                                // Add members from task assigned_user_ids
+                                stageAssignments[stage.id].forEach(assignment => {
+                                  if (assignment.task_id && assignment.tasks?.assigned_user_ids) {
+                                    assignment.tasks.assigned_user_ids.forEach((userId: string) => {
+                                      const member = teamMembers.find(m => m.id === userId);
+                                      if (member) {
+                                        assignedMembers.add(member.name);
+                                      }
+                                    });
+                                  }
+                                });
+                                
+                                return Array.from(assignedMembers).map((memberName, index) => (
+                                  <span
+                                    key={`${memberName}-${index}`}
+                                    className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                                  >
+                                    <User className="w-3 h-3 mr-1" />
+                                    {memberName}
                                     <span className="ml-1 text-green-600" title="Task created">✓</span>
-                                  )}
-                                </span>
-                              ))}
+                                  </span>
+                                ));
+                              })()}
                             </div>
                           </div>
                         )}
@@ -852,9 +881,19 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                           <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                             <div className="text-xs font-medium text-gray-700 mb-2">Associated Tasks:</div>
                             <div className="space-y-2">
-                              {stageAssignments[stage.id]
-                                .filter(assignment => assignment.task_id)
-                                .map(assignment => (
+                              {(() => {
+                                // Get unique tasks from stage assignments to avoid duplicates
+                                const uniqueTasks = new Map();
+                                
+                                stageAssignments[stage.id]
+                                  .filter(assignment => assignment.task_id)
+                                  .forEach(assignment => {
+                                    if (!uniqueTasks.has(assignment.task_id)) {
+                                      uniqueTasks.set(assignment.task_id, assignment);
+                                    }
+                                  });
+                                
+                                return Array.from(uniqueTasks.values()).map(assignment => (
                                   <div key={assignment.task_id} className="p-3 bg-white rounded border">
                                     <div className="flex items-center justify-between mb-2">
                                       <div className="flex items-center space-x-2">
@@ -904,8 +943,33 @@ const RentalDealTimeline: React.FC<RentalDealTimelineProps> = ({ dealId, dealTyp
                                         <p className="mt-1 line-clamp-2">{assignment.task_description}</p>
                                       </div>
                                     )}
+                                    
+                                    {/* Show assigned users from task's assigned_user_ids - using same logic as main tasks page */}
+                                    {assignment.tasks?.assigned_user_ids && Array.isArray(assignment.tasks.assigned_user_ids) && assignment.tasks.assigned_user_ids.length > 0 && (
+                                      <div className="mt-2">
+                                        <span className="text-xs font-medium text-gray-600">Assigned to:</span>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                          {assignment.tasks.assigned_user_ids
+                                            .filter((userId: string) => userId) // Filter out null/undefined values
+                                            .map((userId: string) => {
+                                              const member = teamMembers.find(m => m.id === userId);
+                                              return (
+                                                <span
+                                                  key={userId}
+                                                  className="inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full"
+                                                >
+                                                  <User className="w-3 h-3 mr-1" />
+                                                  {member?.name || 'Unknown'}
+                                                  <span className="ml-1 text-green-600">✓</span>
+                                                </span>
+                                              );
+                                            })}
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                ))}
+                                ));
+                              })()}
                             </div>
                           </div>
                         )}

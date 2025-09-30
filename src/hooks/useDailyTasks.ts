@@ -11,7 +11,17 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
-  const { user } = useAuth();
+  
+  // Safe useAuth with fallback
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext.user;
+  } catch (error) {
+    // This can happen during hot reload or if context is not available
+    console.warn('useAuth not available in useDailyTasks, using null user');
+  }
+  
   const subscriptionRef = useRef<any>(null);
 
   const fetchTasks = useCallback(async () => {

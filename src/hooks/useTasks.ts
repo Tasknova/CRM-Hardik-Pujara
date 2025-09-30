@@ -9,7 +9,15 @@ export const useTasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  
+  // Safe useAuth with fallback
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext.user;
+  } catch (error) {
+    console.warn('useAuth not available in useTasks, using null user');
+  }
 
   const fetchUserDataForTasks = async (tasks: any[]): Promise<Task[]> => {
     if (!tasks.length) return [];

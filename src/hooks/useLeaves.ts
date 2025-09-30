@@ -8,7 +8,16 @@ export const useLeaves = () => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  
+  // Safe useAuth with fallback
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext.user;
+  } catch (error) {
+    console.warn('useAuth not available in useLeaves, using null user');
+  }
+  
   const subscriptionRef = useRef<any>(null);
 
   useEffect(() => {

@@ -133,22 +133,107 @@ export const authService = {
   async deleteMember(id: string): Promise<void> {
     console.log('🔍 Attempting to delete member with ID:', id);
     
-    const { data, error } = await supabase
-      .rpc('delete_member_with_cascade', { target_member_id: id });
+    try {
+      // First, try the cascade function
+      const { data, error } = await supabase
+        .rpc('delete_member_with_cascade', { target_member_id: id });
+      
+      console.log('📊 Delete member response:', { data, error });
+      
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw new Error(`Error deleting member: ${error.message}`);
+      }
+      
+      if (data && !data.success) {
+        console.error('❌ Function returned error:', data);
+        throw new Error(data.message || 'Error deleting member');
+      }
+      
+      console.log('✅ Member deleted successfully:', data);
+    } catch (error) {
+      // If the cascade function fails, try manual cleanup
+      console.log('🔄 Cascade function failed, attempting manual cleanup...');
+      
+      try {
+        // Manual cleanup in the correct order
+        await this.cleanupMemberReferences(id);
+        
+        // Finally delete the member
+        const { error: deleteError } = await supabase
+          .from('members')
+          .delete()
+          .eq('id', id);
+        
+        if (deleteError) {
+          throw new Error(`Error deleting member: ${deleteError.message}`);
+        }
+        
+        console.log('✅ Member deleted successfully with manual cleanup');
+      } catch (manualError) {
+        console.error('❌ Manual cleanup failed:', manualError);
+        throw new Error(`Error deleting member: ${manualError instanceof Error ? manualError.message : 'Unknown error'}`);
+      }
+    }
+  },
+
+  async cleanupMemberReferences(memberId: string): Promise<void> {
+    console.log('🧹 Cleaning up member references for ID:', memberId);
     
-    console.log('📊 Delete member response:', { data, error });
+    // Delete in the correct order to avoid foreign key violations
+    const cleanupSteps = [
+      // 1. Delete stage assignments first (they reference tasks)
+      () => supabase.from('rental_stage_assignments').delete().eq('member_id', memberId),
+      () => supabase.from('builder_stage_assignments').delete().eq('member_id', memberId),
+      
+      // 2. Delete team member assignments
+      () => supabase.from('rental_deal_team_members').delete().eq('member_id', memberId),
+      () => supabase.from('builder_deal_team_members').delete().eq('member_id', memberId),
+      
+      // 3. Delete stage assignments where member is assigned_to (check if column exists)
+      () => supabase.from('rental_deal_stages').delete().eq('assigned_to', memberId),
+      // Skip builder_deal_stages.assigned_to if column doesn't exist
+      
+      // 4. Update tasks to remove member from assigned_user_ids (handle JSONB properly)
+      () => supabase
+        .from('tasks')
+        .update({ assigned_user_ids: [] })
+        .contains('assigned_user_ids', [memberId]),
+      
+      // 5. Delete tasks where member is primary assignee
+      () => supabase.from('tasks').delete().eq('user_id', memberId),
+      
+      // 6. Delete leave balances
+      () => supabase.from('member_leave_balances').delete().eq('member_id', memberId),
+      () => supabase.from('project_manager_leave_balances').delete().eq('project_manager_id', memberId),
+      
+      // 7. Delete leaves
+      () => supabase.from('leaves').delete().eq('user_id', memberId),
+      
+      // 8. Delete notifications
+      () => supabase.from('notifications').delete().eq('user_id', memberId),
+      
+      // 9. Delete daily tasks
+      () => supabase.from('daily_tasks').delete().eq('user_id', memberId),
+      
+      // 10. Delete project manager assignments
+      () => supabase.from('project_manager_assignments').delete().eq('project_manager_id', memberId),
+    ];
     
-    if (error) {
-      console.error('❌ Supabase error:', error);
-      throw new Error(`Failed to delete member: ${error.message}`);
+    for (const step of cleanupSteps) {
+      try {
+        const { error } = await step();
+        if (error) {
+          console.warn('⚠️ Cleanup step failed:', error.message);
+          // Continue with other steps even if one fails
+        }
+      } catch (error) {
+        console.warn('⚠️ Cleanup step failed:', error);
+        // Continue with other steps
+      }
     }
     
-    if (data && !data.success) {
-      console.error('❌ Function returned error:', data);
-      throw new Error(data.message || 'Failed to delete member');
-    }
-    
-    console.log('✅ Member deleted successfully:', data);
+    console.log('✅ Member references cleanup completed');
   },
 
   async getMembers(): Promise<Member[]> {

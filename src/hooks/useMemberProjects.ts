@@ -7,7 +7,15 @@ export function useMemberProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  
+  // Safe useAuth with fallback
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext.user;
+  } catch (error) {
+    console.warn('useAuth not available in useMemberProjects, using null user');
+  }
 
   const fetchMemberProjects = async () => {
     if (!user) {
