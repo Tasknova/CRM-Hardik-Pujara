@@ -124,6 +124,9 @@ export const useRealtimeTasks = () => {
       
       // Fetch user data for all tasks
       const tasksWithUsers = await fetchUserDataForTasks(data || []);
+      console.log('🔍 useRealtimeTasks - Fetched tasks from database:', data?.length || 0);
+      console.log('🔍 useRealtimeTasks - Tasks with users:', tasksWithUsers.length);
+      console.log('🔍 useRealtimeTasks - Sample tasks:', tasksWithUsers.slice(0, 3).map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
       setTasks(tasksWithUsers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -134,18 +137,24 @@ export const useRealtimeTasks = () => {
 
   const addTask = async (task: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => {
     try {
+      console.log('🔍 useRealtimeTasks - Adding task:', task);
       const { data, error } = await supabase
         .from('tasks')
         .insert([task])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('🔍 useRealtimeTasks - Database error:', error);
+        throw error;
+      }
       
+      console.log('🔍 useRealtimeTasks - Task added successfully:', data);
       // Don't add to local state here - let the real-time subscription handle it
       // This prevents duplicate tasks from appearing
       return data;
     } catch (err) {
+      console.error('🔍 useRealtimeTasks - Error in addTask:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
       throw err;
     }

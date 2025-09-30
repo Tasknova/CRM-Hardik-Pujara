@@ -15,9 +15,11 @@ interface ProjectCardProps {
   onDelete?: (id: string) => void;
   onEdit?: (project: Project) => void;
   onProjectUpdate?: (project: Project) => void;
+  onTabChange?: (tab: string) => void; // Add this for PM dashboard
+  onProjectSelect?: (project: Project, type: 'regular' | 'rental' | 'builder') => void; // Add this for PM dashboard
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [], onDelete, onEdit, onProjectUpdate }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [], onDelete, onEdit, onProjectUpdate, onTabChange, onProjectSelect }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -122,12 +124,28 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
             </Badge>
           </div>
           
-          {project.client_name && (
-            <div className="flex items-center gap-1.5 text-gray-600 text-sm">
-              <Building className="w-3.5 h-3.5" />
-              <span className="truncate">{project.client_name}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 text-gray-600 text-sm">
+            {project.client_name && (
+              <div className="flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5" />
+                <span className="truncate">{project.client_name}</span>
+              </div>
+            )}
+            {project.project_type && (
+              <Badge 
+                variant="outline" 
+                className={`text-xs ${
+                  project.project_type === 'rental' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                  project.project_type === 'builder' ? 'bg-green-50 text-green-700 border-green-200' :
+                  'bg-gray-50 text-gray-700 border-gray-200'
+                }`}
+              >
+                {project.project_type === 'rental' ? 'Rental Deal' :
+                 project.project_type === 'builder' ? 'Builder Deal' :
+                 'Regular Project'}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Description */}
@@ -172,18 +190,80 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
 
         {/* Action Buttons - at bottom */}
         <div className="flex gap-2">
+          {/* View Tasks Button - Different navigation for different project types */}
           <Button
             className="flex-1 text-sm py-2"
             variant="primary"
-            onClick={() => navigate(`/projects/${project.id}/tasks`)}
+            onClick={() => {
+              console.log('🔍 ProjectCard - onTabChange available:', !!onTabChange);
+              console.log('🔍 ProjectCard - User role:', user?.role);
+              if (onTabChange && onProjectSelect) {
+                // PM Dashboard - use internal routing
+                console.log('🔍 ProjectCard - Using internal routing (PM Dashboard)');
+                onProjectSelect(project, project.project_type || 'regular');
+                onTabChange('tasks');
+              } else {
+                // Admin Dashboard - use external routing
+                console.log('🔍 ProjectCard - Using external routing (Admin Dashboard)');
+                if (project.project_type === 'rental') {
+                  navigate(`/rental-deals/${project.id}/tasks`);
+                } else if (project.project_type === 'builder') {
+                  navigate(`/builder-deals/${project.id}/tasks`);
+                } else {
+                  navigate(`/projects/${project.id}/tasks`);
+                }
+              }
+            }}
           >
             <Eye className="w-4 h-4 mr-2" />
             View Tasks
           </Button>
+          
+          {/* Timeline Button - Only for rental/builder deals */}
+          {(project.project_type === 'rental' || project.project_type === 'builder') && (
+            <Button
+              className="flex-1 text-sm py-2"
+              variant="outline"
+              onClick={() => {
+                if (onTabChange && onProjectSelect) {
+                  // PM Dashboard - use internal routing
+                  onProjectSelect(project, project.project_type || 'regular');
+                  onTabChange('timeline'); // Go to timeline
+                } else {
+                  // Admin Dashboard - use external routing
+                  navigate(
+                    project.project_type === 'rental' 
+                      ? `/rental-deals/${project.id}/timeline`
+                      : `/builder-deals/${project.id}/timeline`
+                  );
+                }
+              }}
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Timeline
+            </Button>
+          )}
+          
+          {/* Documents Button - Different navigation for different project types */}
           <Button
             className="flex-1 text-sm py-2"
             variant="outline"
-            onClick={() => navigate(`/projects/${project.id}/documents`)}
+            onClick={() => {
+              if (onTabChange && onProjectSelect) {
+                // PM Dashboard - use internal routing
+                onProjectSelect(project, project.project_type || 'regular');
+                onTabChange('documents'); // Go to documents
+              } else {
+                // Admin Dashboard - use external routing
+                if (project.project_type === 'rental') {
+                  navigate(`/rental-deals/${project.id}/documents`);
+                } else if (project.project_type === 'builder') {
+                  navigate(`/builder-deals/${project.id}/documents`);
+                } else {
+                  navigate(`/projects/${project.id}/documents`);
+                }
+              }
+            }}
           >
             <FileText className="w-4 h-4 mr-2" />
             Documents

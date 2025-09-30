@@ -1,25 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useTasks } from '../../hooks/useTasks';
+import { useRealtimeTasks } from '../../hooks/useRealtimeTasks';
 import { useProjects } from '../../hooks/useProjects';
 import { useDailyTasks } from '../../hooks/useDailyTasks';
 import { authService } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import TaskCard from './TaskCard';
 import TaskFiltersComponent from './TaskFilters';
 import Button from '../ui/Button';
 import TaskForm from './TaskForm';
 import { DailyTaskCard } from './DailyTaskCard';
 import { DailyTaskForm } from './DailyTaskForm';
-import { Plus, Calendar, Building, CheckCircle2, Play, Clock, Clock3 } from 'lucide-react';
+import { Plus, Calendar, Building, CheckCircle2, Play, Clock, Clock3, ArrowLeft } from 'lucide-react';
 import Badge from '../ui/Badge';
 import Card from '../ui/Card';
 import { Task, DailyTask } from '../../types';
 
-const ProjectTasksPage: React.FC = () => {
-  const { projectId } = useParams<{ projectId: string }>();
+interface ProjectTasksPageProps {
+  projectId?: string;
+  onBack?: () => void;
+}
+
+const ProjectTasksPage: React.FC<ProjectTasksPageProps> = ({ projectId: propProjectId, onBack }) => {
+  const { projectId: urlProjectId } = useParams<{ projectId: string }>();
+  const projectId = propProjectId || urlProjectId;
   const { user } = useAuth();
-  const { tasks, addTask, updateTask, deleteTask, filterTasks } = useTasks();
+  const { tasks, addTask, updateTask, deleteTask, filterTasks } = useRealtimeTasks();
   const { projects } = useProjects();
   const { 
     tasks: dailyTasks, 
@@ -34,8 +41,23 @@ const ProjectTasksPage: React.FC = () => {
   const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
   const [taskFilters, setTaskFilters] = useState({ project: projectId });
   const filteredTasks = filterTasks({ ...taskFilters, project: projectId });
+  
+  // Debug logging
+  console.log('🔍 ProjectTasksPage - projectId:', projectId);
+  console.log('🔍 ProjectTasksPage - All tasks:', tasks.length);
+  console.log('🔍 ProjectTasksPage - All tasks details:', tasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
+  console.log('🔍 ProjectTasksPage - Task filters:', taskFilters);
+  console.log('🔍 ProjectTasksPage - Filtered tasks:', filteredTasks.length);
+  console.log('🔍 ProjectTasksPage - Filtered tasks details:', filteredTasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
+  
+  // Additional debugging for project ID matching
+  const tasksWithMatchingProjectId = tasks.filter(task => task.project_id === projectId);
+  console.log('🔍 ProjectTasksPage - Tasks with matching project_id:', tasksWithMatchingProjectId.length);
+  console.log('🔍 ProjectTasksPage - Tasks with matching project_id details:', tasksWithMatchingProjectId.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [isDailyTaskFormOpen, setIsDailyTaskFormOpen] = useState(false);
+  const [dealProject, setDealProject] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
     Promise.all([
@@ -46,6 +68,64 @@ const ProjectTasksPage: React.FC = () => {
       setAdmins(adminsData.map(a => ({ id: a.id, name: a.name })));
     });
   }, []);
+
+  // Fetch deal data if project is not found in regular projects
+  useEffect(() => {
+    const fetchDealData = async () => {
+      if (!projectId) return;
+      
+      setLoading(true);
+      try {
+        // Check rental deals
+        const { data: rentalDeal, error: rentalError } = await supabase
+          .from('rental_deals')
+          .select('*')
+          .eq('id', projectId)
+          .single();
+
+        if (rentalDeal && !rentalError) {
+          setDealProject({
+            id: rentalDeal.id,
+            name: rentalDeal.project_name,
+            description: `Rental Deal: ${rentalDeal.deal_type} - ${rentalDeal.property_address}`,
+            client_name: rentalDeal.client_name,
+            start_date: rentalDeal.start_date,
+            expected_end_date: rentalDeal.end_date,
+            status: 'active',
+            project_type: 'rental'
+          });
+          return;
+        }
+
+        // Check builder deals
+        const { data: builderDeal, error: builderError } = await supabase
+          .from('builder_deals')
+          .select('*')
+          .eq('id', projectId)
+          .single();
+
+        if (builderDeal && !builderError) {
+          setDealProject({
+            id: builderDeal.id,
+            name: builderDeal.project_name,
+            description: `Builder Deal: ${builderDeal.deal_type} - ${builderDeal.property_address}`,
+            client_name: builderDeal.client_name,
+            start_date: builderDeal.start_date,
+            expected_end_date: builderDeal.end_date,
+            status: 'active',
+            project_type: 'builder'
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching deal data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDealData();
+  }, [projectId]);
 
   const handleAddTask = (task) => {
     addTask({ ...task, project_id: projectId });
@@ -93,7 +173,7 @@ const ProjectTasksPage: React.FC = () => {
   };
 
   // Get current project details
-  const currentProject = projects.find(p => p.id === projectId);
+  const currentProject = dealProject || projects.find(p => p.id === projectId);
 
   // Calculate task statistics
   const totalTasks = filteredTasks.length;
@@ -135,6 +215,20 @@ const ProjectTasksPage: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Building className="w-8 h-8 text-blue-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading Project...</h2>
+          <p className="text-gray-600">Please wait while we fetch the project details.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentProject) {
     return (
       <div className="p-6">
@@ -153,6 +247,23 @@ const ProjectTasksPage: React.FC = () => {
         <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-white to-blue-50/50">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-indigo-600/5"></div>
           <div className="relative p-8">
+            {/* Back Button */}
+            <div className="mb-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (onBack) {
+                    onBack();
+                  } else {
+                    window.history.back();
+                  }
+                }}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Projects
+              </Button>
+            </div>
             <div className="flex items-start justify-between mb-6">
               <div>
                 <div className="flex items-center gap-3 mb-3">

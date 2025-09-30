@@ -44,11 +44,18 @@ interface Project {
   documents: Document[];
 }
 
-const ProjectDocuments: React.FC = () => {
-  const { projectId } = useParams<{ projectId: string }>();
+interface ProjectDocumentsProps {
+  projectId?: string;
+  onBack?: () => void;
+}
+
+const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({ projectId: propProjectId, onBack }) => {
+  const { projectId: urlProjectId } = useParams<{ projectId: string }>();
+  const projectId = propProjectId || urlProjectId;
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dealProject, setDealProject] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [uploading, setUploading] = useState(false);
   const [showDocumentForm, setShowDocumentForm] = useState(false);
@@ -60,6 +67,7 @@ const ProjectDocuments: React.FC = () => {
   useEffect(() => {
     if (projectId) {
       fetchProject();
+      fetchDealData();
     }
   }, [projectId]);
 
@@ -77,15 +85,69 @@ const ProjectDocuments: React.FC = () => {
       setProject(data);
     } catch (error) {
       console.error('Error fetching project:', error);
-      toast.error('Failed to load project');
-      navigate('/dashboard');
+      // Don't navigate away, let fetchDealData handle it
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchDealData = async () => {
+    try {
+      // Check rental deals
+      const { data: rentalDeal, error: rentalError } = await supabase
+        .from('rental_deals')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (rentalDeal && !rentalError) {
+        setDealProject({
+          id: rentalDeal.id,
+          name: rentalDeal.project_name,
+          description: `Rental Deal: ${rentalDeal.deal_type} - ${rentalDeal.property_address}`,
+          client_name: rentalDeal.client_name,
+          documents: rentalDeal.documents || []
+        });
+        return;
+      }
+
+      // Check builder deals
+      const { data: builderDeal, error: builderError } = await supabase
+        .from('builder_deals')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (builderDeal && !builderError) {
+        setDealProject({
+          id: builderDeal.id,
+          name: builderDeal.project_name,
+          description: `Builder Deal: ${builderDeal.deal_type} - ${builderDeal.property_address}`,
+          client_name: builderDeal.client_name,
+          documents: builderDeal.documents || []
+        });
+        return;
+      }
+
+      // If no deal found and no regular project found, show error
+      if (!project) {
+        toast.error('Failed to load project');
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      console.error('Error fetching deal data:', error);
+      if (!project) {
+        toast.error('Failed to load project');
+        navigate('/dashboard');
+      }
+    }
+  };
+
+  // Use dealProject if available, otherwise use regular project
+  const currentProject = dealProject || project;
+
   const handleFileUpload = async (files: FileList) => {
-    if (!files.length || !project) return;
+    if (!files.length || !currentProject) return;
 
     try {
       setUploading(true);
@@ -93,7 +155,7 @@ const ProjectDocuments: React.FC = () => {
         // Upload file to storage
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `projects/${project.id}/${fileName}`;
+        const filePath = `projects/${currentProject.id}/${fileName}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('project-documents')
@@ -117,12 +179,14 @@ const ProjectDocuments: React.FC = () => {
       const newDocuments = await Promise.all(uploadPromises);
 
       // Update project documents
-      const updatedDocuments = [...(project.documents || []), ...newDocuments];
+      const updatedDocuments = [...(currentProject.documents || []), ...newDocuments];
 
+      // Update the appropriate table based on project type
+      const tableName = dealProject ? (dealProject.project_type === 'rental' ? 'rental_deals' : 'builder_deals') : 'projects';
       const { error: updateError } = await supabase
-        .from('projects')
+        .from(tableName)
         .update({ documents: updatedDocuments })
-        .eq('id', project.id);
+        .eq('id', currentProject.id);
 
       if (updateError) throw updateError;
 
@@ -336,12 +400,12 @@ const ProjectDocuments: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Button
-            onClick={() => navigate('/dashboard')}
+            onClick={onBack || (() => navigate('/dashboard'))}
             variant="outline"
             className="flex items-center space-x-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back</span>
+            <span>Back to Projects</span>
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Project Documents</h1>

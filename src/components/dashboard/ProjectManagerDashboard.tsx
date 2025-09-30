@@ -108,7 +108,6 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
   const [editProjectForm, setEditProjectForm] = useState({
     name: '',
     description: '',
-    client_id: '',
     client_name: '',
     start_date: '',
     expected_end_date: '',
@@ -431,14 +430,15 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     };
   }, []);
 
-  // Fetch assigned projects for project manager
+  // Fetch assigned projects for project manager (including rental and builder deals)
   useEffect(() => {
     if (!user || user.role !== 'project_manager') return;
     
     const fetchAssignedProjects = async () => {
       setAssignedProjectsLoading(true);
       try {
-        const { data, error } = await supabase
+        // Fetch regular projects
+        const { data: regularProjects, error: regularError } = await supabase
           .from('project_manager_assignments')
           .select(`
             *,
@@ -447,12 +447,72 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           .eq('project_manager_id', user.id)
           .eq('is_active', true);
 
-        if (!error && data) {
-          const projects = data
+        // Fetch rental deals assigned to this PM
+        const { data: rentalDeals, error: rentalError } = await supabase
+          .from('rental_deals')
+          .select('*')
+          .eq('project_manager_id', user.id);
+
+        // Fetch builder deals assigned to this PM
+        const { data: builderDeals, error: builderError } = await supabase
+          .from('builder_deals')
+          .select('*')
+          .eq('project_manager_id', user.id);
+
+        if (regularError) console.error('Error fetching regular projects:', regularError);
+        if (rentalError) console.error('Error fetching rental deals:', rentalError);
+        if (builderError) console.error('Error fetching builder deals:', builderError);
+
+        // Combine all projects
+        const allProjects: Project[] = [];
+        
+        // Add regular projects
+        if (regularProjects) {
+          const regularProjectsList = regularProjects
             .map(item => item.project)
             .filter(Boolean) as Project[];
-          setAssignedProjects(projects);
+          allProjects.push(...regularProjectsList);
         }
+
+        // Add rental deals as projects
+        if (rentalDeals) {
+          const rentalProjects = rentalDeals.map(deal => ({
+            id: deal.id,
+            name: deal.project_name,
+            description: `Rental Deal: ${deal.deal_type} - ${deal.property_address}`,
+            client_id: null,
+            client_name: deal.client_name,
+            start_date: deal.start_date,
+            expected_end_date: deal.end_date,
+            status: 'active',
+            project_type: 'rental',
+            created_at: deal.created_at || new Date().toISOString(),
+            updated_at: deal.updated_at || new Date().toISOString()
+          })) as Project[];
+          allProjects.push(...rentalProjects);
+        }
+
+        // Add builder deals as projects
+        if (builderDeals) {
+          const builderProjects = builderDeals.map(deal => ({
+            id: deal.id,
+            name: deal.project_name,
+            description: `Builder Deal: ${deal.deal_type} - ${deal.property_address}`,
+            client_id: null,
+            client_name: deal.client_name,
+            start_date: deal.start_date,
+            expected_end_date: deal.end_date,
+            status: 'active',
+            project_type: 'builder',
+            created_at: deal.created_at || new Date().toISOString(),
+            updated_at: deal.updated_at || new Date().toISOString()
+          })) as Project[];
+          allProjects.push(...builderProjects);
+        }
+
+        console.log('🔍 PM Dashboard - Fetched assigned projects:', allProjects.length);
+        console.log('🔍 PM Dashboard - Assigned projects details:', allProjects.map(p => ({ id: p.id, name: p.name, type: p.project_type })));
+        setAssignedProjects(allProjects);
       } catch (error) {
         console.error('Error fetching assigned projects:', error);
       } finally {
@@ -463,10 +523,11 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     fetchAssignedProjects();
   }, [user]);
 
-  // Real-time subscription for tasks (project manager sees all changes)
+  // Real-time subscription for tasks, rental deals, and builder deals
   useEffect(() => {
     if (!user || user.role !== 'project_manager') return;
-    const channel = supabase.channel('tasks-realtime-pm')
+    
+    const channel = supabase.channel('pm-dashboard-realtime')
       .on(
         'postgres_changes',
         {
@@ -475,8 +536,34 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           table: 'tasks',
         },
         (payload) => {
-          // On any change, refetch tasks
+          // On any task change, refetch tasks
           refetchTasks();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rental_deals',
+          filter: `project_manager_id=eq.${user.id}`,
+        },
+        (payload) => {
+          // On rental deal change, refetch projects
+          window.location.reload(); // Simple refresh for now
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'builder_deals',
+          filter: `project_manager_id=eq.${user.id}`,
+        },
+        (payload) => {
+          // On builder deal change, refetch projects
+          window.location.reload(); // Simple refresh for now
         }
       )
       .subscribe();
@@ -518,17 +605,22 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
 
   // Fix: Wrap addTask for TaskForm to match expected signature
   const handleAddTask = async (task: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => {
-    await addTask(task as any); // 'as any' to satisfy the type, since addTask expects created_by
+    try {
+      console.log('🔍 PM Dashboard - Adding task:', task);
+      const result = await addTask(task as any); // 'as any' to satisfy the type, since addTask expects created_by
+      console.log('🔍 PM Dashboard - Task added successfully:', result);
+      toast.success('Task created successfully!');
+    } catch (error) {
+      console.error('🔍 PM Dashboard - Error adding task:', error);
+      toast.error('Failed to create task. Please try again.');
+    }
   };
 
-  const handleEditProject = async (project: Project) => {
+  const handleEditProject = (project: Project) => {
     setEditProject(project);
-    // Load clients before opening modal
-    await fetchClients();
     setEditProjectForm({
       name: project.name,
       description: project.description || '',
-      client_id: project.client_id || '',
       client_name: project.client_name || '',
       start_date: project.start_date || '',
       expected_end_date: project.expected_end_date || '',
@@ -572,6 +664,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     // Update the project in the local state
     fetchProjects();
   };
+
 
   // Client management functions
   const fetchClients = async () => {
@@ -668,8 +761,8 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           <div className="text-gray-500">No {title.toLowerCase()}.</div>
         ) : (
           <>
-            <div className="flex h-[28rem] w-full">
-            <TaskCard key={tasks[0].id} task={tasks[0]} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} />
+            <div className="h-96 flex">
+            <TaskCard key={tasks[0].id} task={tasks[0]} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} projects={projects.map(p => ({ id: p.id, name: p.name }))} />
             </div>
             {tasks.length > 1 && !openSections[sectionKey] && (
               <button
@@ -683,8 +776,8 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
               <>
                 <div className="space-y-4">
                                      {tasks.slice(1).map(task => (
-                     <div key={task.id} className="flex h-[28rem] w-full">
-                       <TaskCard task={task} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} />
+                     <div key={task.id} className="h-96 flex">
+                        <TaskCard task={task} showUser={true} onDelete={() => {}} onStatusChange={() => {}} section={sectionName} members={members} admins={admins} projectManagers={projectManagers} projects={projects.map(p => ({ id: p.id, name: p.name }))} />
                      </div>
                    ))}
                 </div>
@@ -711,9 +804,14 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
 
     // Filter tasks to only show tasks from assigned projects
     const assignedProjectIds = assignedProjects.map(p => p.id);
-    const filteredTasks = tasks.filter(task => 
+    const tasksForAssignedProjects = tasks.filter(task => 
       !task.project_id || assignedProjectIds.includes(task.project_id)
     );
+    
+    // TEMPORARY FIX: If no tasks match assigned projects, use all tasks for dashboard stats
+    const filteredTasks = tasksForAssignedProjects.length > 0 ? tasksForAssignedProjects : tasks;
+    console.log('🔍 PM Dashboard Stats - Using tasks for stats:', filteredTasks.length);
+    console.log('🔍 PM Dashboard Stats - Tasks for assigned projects:', tasksForAssignedProjects.length);
 
     // Recently Completed: completed within last 3 days
     const recentlyCompletedTasks = filteredTasks.filter(task => {
@@ -837,12 +935,35 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
   }
 
   if (activeTab === 'tasks') {
+    console.log('🔍 PM Dashboard - Active Tab: tasks');
+    console.log('🔍 PM Dashboard - User:', user);
+    console.log('🔍 PM Dashboard - Assigned Projects:', assignedProjects.length);
+    console.log('🔍 PM Dashboard - All Tasks:', tasks.length);
+    
     // Filter tasks to only show tasks from assigned projects
     const assignedProjectIds = assignedProjects.map(p => p.id);
+    console.log('🔍 PM Dashboard - Assigned Project IDs:', assignedProjectIds);
+    console.log('🔍 PM Dashboard - All Tasks Details:', tasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
+    
     const tasksForAssignedProjects = tasks.filter(task => 
       !task.project_id || assignedProjectIds.includes(task.project_id)
     );
-    const filteredTasksForDisplay = filterTasks(taskFilters, tasksForAssignedProjects);
+    console.log('🔍 PM Dashboard - Tasks for assigned projects:', tasksForAssignedProjects.length);
+    console.log('🔍 PM Dashboard - Tasks for assigned projects details:', tasksForAssignedProjects.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
+    
+    // TEMPORARY FIX: If no tasks match assigned projects, show all tasks for debugging
+    const tasksToDisplay = tasksForAssignedProjects.length > 0 ? tasksForAssignedProjects : tasks;
+    console.log('🔍 PM Dashboard - Tasks to display (with fallback):', tasksToDisplay.length);
+    
+    const filteredTasksForDisplay = filterTasks(taskFilters, tasksToDisplay);
+    console.log('🔍 PM Dashboard - Filtered tasks for display:', filteredTasksForDisplay.length);
+    
+    // Debug project filter
+    const projectsForFilter = tasksToDisplay.length > 0 && tasksForAssignedProjects.length > 0 
+      ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
+      : projects.map(p => ({ id: p.id, name: p.name }));
+    console.log('🔍 PM Dashboard - Projects for filter:', projectsForFilter.length);
+    console.log('🔍 PM Dashboard - Projects for filter details:', projectsForFilter);
 
     return (
       <div className="p-6 space-y-6">
@@ -881,7 +1002,10 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             members={members}
             admins={admins}
             projectManagers={projectManagers}
-            projects={assignedProjects.map(p => ({ id: p.id, name: p.name }))}
+            projects={tasksToDisplay.length > 0 && tasksForAssignedProjects.length > 0 
+              ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
+              : projects.map(p => ({ id: p.id, name: p.name }))
+            }
           />
         </div>
 
@@ -895,9 +1019,6 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           </div>
         )}
 
-        {/* Daily Tasks Overview */}
-        <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Daily Tasks Overview</h2>
-        
         {/* Loading State */}
         {tasksLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -928,7 +1049,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                   </div>
                 ) : (
                   filteredTasksForDisplay.map(task => (
-                    <div key={task.id} className="flex h-[28rem] w-full">
+                    <div key={task.id} className="flex h-[28rem]">
                       <TaskCard
                         task={task}
                         onDelete={deleteTask}
@@ -938,7 +1059,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                         members={members}
                         admins={admins}
                         projectManagers={projectManagers}
-                        projects={assignedProjects.map(p => ({ id: p.id, name: p.name }))}
+                        projects={projects.map(p => ({ id: p.id, name: p.name }))}
                       />
                     </div>
                   ))
@@ -980,20 +1101,34 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={handleAddTask}
-          availableProjects={assignedProjects.map(p => ({ id: p.id, name: p.name }))}
+          availableProjects={projectsForFilter}
         />
       </div>
     );
   }
 
   if (activeTab === 'my-tasks') {
+    console.log('🔍 PM Dashboard My Tasks - Active Tab: my-tasks');
+    console.log('🔍 PM Dashboard My Tasks - Current User ID:', user?.id);
+    console.log('🔍 PM Dashboard My Tasks - All Tasks:', tasks.length);
+    
     // Filter tasks to show only tasks assigned to the current project manager from assigned projects
     const assignedProjectIds = assignedProjects.map(p => p.id);
+    console.log('🔍 PM Dashboard My Tasks - Assigned Project IDs:', assignedProjectIds);
+    
     const myTasks = tasks.filter(task => 
       task.user_id === user?.id && 
       (!task.project_id || assignedProjectIds.includes(task.project_id))
     );
-    const filteredMyTasks = filterTasks(taskFilters, myTasks);
+    console.log('🔍 PM Dashboard My Tasks - My tasks count:', myTasks.length);
+    console.log('🔍 PM Dashboard My Tasks - My tasks details:', myTasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id, user_id: t.user_id })));
+    
+    // TEMPORARY FIX: If no tasks match assigned projects, show all tasks assigned to PM for debugging
+    const myTasksToDisplay = myTasks.length > 0 ? myTasks : tasks.filter(task => task.user_id === user?.id);
+    console.log('🔍 PM Dashboard My Tasks - Tasks to display (with fallback):', myTasksToDisplay.length);
+    
+    const filteredMyTasks = filterTasks(taskFilters, myTasksToDisplay);
+    console.log('🔍 PM Dashboard My Tasks - Filtered my tasks count:', filteredMyTasks.length);
 
     return (
       <div className="p-6 space-y-6">
@@ -1023,7 +1158,10 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             members={members}
             admins={admins}
             projectManagers={projectManagers}
-            projects={assignedProjects.map(p => ({ id: p.id, name: p.name }))}
+            projects={myTasksToDisplay.length > 0 && myTasks.length > 0 
+              ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
+              : projects.map(p => ({ id: p.id, name: p.name }))
+            }
           />
         </div>
 
@@ -1065,7 +1203,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
               </div>
             ) : (
               filteredMyTasks.map(task => (
-                <div key={task.id} className="flex h-[28rem] w-full">
+                <div key={task.id} className="flex h-[28rem]">
                   <TaskCard
                     task={task}
                     onDelete={deleteTask}
@@ -1087,7 +1225,11 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={handleAddTask}
-          availableProjects={assignedProjects.map(p => ({ id: p.id, name: p.name }))}
+          availableProjects={myTasksToDisplay.length > 0 && myTasks.length > 0 
+            ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
+            : projects.map(p => ({ id: p.id, name: p.name }))
+          }
+          isMyTasksPage={true}
         />
       </div>
     );
@@ -1304,6 +1446,9 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                 })
                 .map(project => {
                   const projectTasks = tasks.filter(task => task.project_id === project.id);
+                  console.log('🔍 ProjectCard Debug - Project:', project.name, 'Project ID:', project.id);
+                  console.log('🔍 ProjectCard Debug - All tasks count:', tasks.length);
+                  console.log('🔍 ProjectCard Debug - Project tasks count:', projectTasks.length);
                   return (
                     <ProjectCard
                       key={project.id}
@@ -1400,18 +1545,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           </form>
         </Modal>
         {/* Edit Project Modal */}
-        <Modal isOpen={!!editProject} onClose={() => {
-          setEditProject(null);
-          setEditProjectForm({
-            name: '',
-            description: '',
-            client_id: '',
-            client_name: '',
-            start_date: '',
-            expected_end_date: '',
-            status: 'active'
-          });
-        }} title="Edit Project">
+        <Modal isOpen={!!editProject} onClose={() => setEditProject(null)} title="Edit Project">
           <form onSubmit={handleUpdateProject} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
@@ -1424,26 +1558,34 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
-              <select
-                className="w-full border rounded px-3 py-2"
-                value={editProjectForm.client_id}
-                onChange={e => {
-                  const selectedClient = clients.find(c => c.id === e.target.value);
-                  setEditProjectForm(f => ({ 
-                    ...f, 
-                    client_id: e.target.value,
-                    client_name: selectedClient?.name || ''
-                  }));
-                }}
-              >
-                <option value="">Select a client...</option>
-                {clients.map(client => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
+              <div className="flex space-x-2">
+                <div className="flex-1">
+                  <AutocompleteInput
+                    label=""
+                    value={editProjectForm.client_name}
+                    onChange={(value) => setEditProjectForm(f => ({ ...f, client_name: value, client_id: '' }))}
+                    onSelect={(client) => {
+                      if (client && client.id) {
+                        setEditProjectForm(f => ({ ...f, client_name: client.name, client_id: client.id }));
+                      }
+                    }}
+                    options={clients}
+                    placeholder="Type client name..."
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setClientForm({ name: editProjectForm.client_name || '', email: '', phone: '', address: '' });
+                    setShowClientModal(true);
+                  }}
+                  className="px-4 py-2"
+                >
+                  Create New
+                </Button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>

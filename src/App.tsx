@@ -14,6 +14,10 @@ import Reports from './components/dashboard/Reports';
 import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import ProjectTasksPage from './components/dashboard/ProjectTasksPage';
 import ProjectDocuments from './components/dashboard/ProjectDocuments';
+import ProjectTasksPageWrapper from './components/dashboard/ProjectTasksPageWrapper';
+import ProjectDocumentsWrapper from './components/dashboard/ProjectDocumentsWrapper';
+import RentalDealTimelineWrapper from './components/dashboard/RentalDealTimelineWrapper';
+import BuilderDealTimelineWrapper from './components/dashboard/BuilderDealTimelineWrapper';
 import Footer from './components/layout/Footer';
 import { supabase } from './lib/supabase';
 import NotificationsPage from './components/dashboard/NotificationsPage';
@@ -125,6 +129,12 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/projects/:projectId/tasks" element={<ProjectTasksPage />} />
           <Route path="/projects/:projectId/documents" element={<ProjectDocuments />} />
+          <Route path="/rental-deals/:dealId/tasks" element={<ProjectTasksPageWrapper />} />
+          <Route path="/rental-deals/:dealId/timeline" element={<RentalDealTimelineWrapper />} />
+          <Route path="/rental-deals/:dealId/documents" element={<ProjectDocumentsWrapper />} />
+          <Route path="/builder-deals/:dealId/tasks" element={<ProjectTasksPageWrapper />} />
+          <Route path="/builder-deals/:dealId/timeline" element={<BuilderDealTimelineWrapper />} />
+          <Route path="/builder-deals/:dealId/documents" element={<ProjectDocumentsWrapper />} />
           <Route path="*" element={
             user.role === 'admin' ? (
               activeTab === 'profile' ? <AdminProfile />
@@ -138,7 +148,7 @@ const AppContent: React.FC = () => {
             ) : user.role === 'project_manager' ? (
               activeTab === 'profile' ? <ProjectManagerProfile />
               : activeTab === 'notifications' ? <NotificationsPage setFilteredNotificationsCount={setFilteredNotificationsCount} />
-              : <ProjectManagerDashboard activeTab={activeTab} />
+              : <ProjectManagerDashboard activeTab={activeTab} onTabChange={setActiveTab} />
             ) : activeTab === 'profile' ? (
               <MemberProfile />
             ) : activeTab === 'notifications' ? (

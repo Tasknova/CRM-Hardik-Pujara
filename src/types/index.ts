@@ -43,6 +43,7 @@ export interface Project {
   start_date?: string;
   expected_end_date?: string;
   status?: 'active' | 'completed' | 'on_hold' | 'cancelled';
+  project_type?: 'regular' | 'rental' | 'builder';
   created_at: string;
   updated_at: string;
 }
