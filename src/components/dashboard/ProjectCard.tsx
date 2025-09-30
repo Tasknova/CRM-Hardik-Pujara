@@ -195,20 +195,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
             className="flex-1 text-sm py-2"
             variant="primary"
             onClick={() => {
-              console.log('🔍 ProjectCard - onTabChange available:', !!onTabChange);
-              console.log('🔍 ProjectCard - User role:', user?.role);
               if (onTabChange && onProjectSelect) {
                 // PM Dashboard - use internal routing
-                console.log('🔍 ProjectCard - Using internal routing (PM Dashboard)');
                 onProjectSelect(project, project.project_type || 'regular');
                 onTabChange('tasks');
               } else {
                 // Admin Dashboard - use external routing
-                console.log('🔍 ProjectCard - Using external routing (Admin Dashboard)');
                 if (project.project_type === 'rental') {
-                  navigate(`/rental-deals/${project.id}/tasks`);
+                  // For rental deals, use deal_id_for_navigation if available, otherwise project.id
+                  const dealId = (project as any).deal_id_for_navigation || project.id;
+                  navigate(`/rental-deals/${dealId}/tasks`);
                 } else if (project.project_type === 'builder') {
-                  navigate(`/builder-deals/${project.id}/tasks`);
+                  // For builder deals, use deal_id_for_navigation if available, otherwise project.id
+                  const dealId = (project as any).deal_id_for_navigation || project.id;
+                  navigate(`/builder-deals/${dealId}/tasks`);
                 } else {
                   navigate(`/projects/${project.id}/tasks`);
                 }
@@ -231,11 +231,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
                   onTabChange('timeline'); // Go to timeline
                 } else {
                   // Admin Dashboard - use external routing
-                  navigate(
-                    project.project_type === 'rental' 
-                      ? `/rental-deals/${project.id}/timeline`
-                      : `/builder-deals/${project.id}/timeline`
-                  );
+                  if (project.project_type === 'rental') {
+                    // For rental deals, use deal_id_for_navigation if available, otherwise project.id
+                    const dealId = (project as any).deal_id_for_navigation || project.id;
+                    navigate(`/rental-deals/${dealId}/timeline`);
+                  } else if (project.project_type === 'builder') {
+                    // For builder deals, use deal_id_for_navigation if available, otherwise project.id
+                    const dealId = (project as any).deal_id_for_navigation || project.id;
+                    navigate(`/builder-deals/${dealId}/timeline`);
+                  }
                 }
               }}
             >
@@ -252,13 +256,17 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
               if (onTabChange && onProjectSelect) {
                 // PM Dashboard - use internal routing
                 onProjectSelect(project, project.project_type || 'regular');
-                onTabChange('documents'); // Go to documents
+                onTabChange('documents');
               } else {
                 // Admin Dashboard - use external routing
                 if (project.project_type === 'rental') {
-                  navigate(`/rental-deals/${project.id}/documents`);
+                  // For rental deals, use deal_id_for_navigation if available, otherwise project.id
+                  const dealId = (project as any).deal_id_for_navigation || project.id;
+                  navigate(`/rental-deals/${dealId}/documents`);
                 } else if (project.project_type === 'builder') {
-                  navigate(`/builder-deals/${project.id}/documents`);
+                  // For builder deals, use deal_id_for_navigation if available, otherwise project.id
+                  const dealId = (project as any).deal_id_for_navigation || project.id;
+                  navigate(`/builder-deals/${dealId}/documents`);
                 } else {
                   navigate(`/projects/${project.id}/documents`);
                 }

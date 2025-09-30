@@ -46,6 +46,8 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
   const { tasks: dailyTasks, loading: dailyTasksLoading } = useDailyTasks({});
   const [assignedProjects, setAssignedProjects] = useState<Project[]>([]);
   const [assignedProjectsLoading, setAssignedProjectsLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProjectType, setSelectedProjectType] = useState<'regular' | 'rental' | 'builder'>('regular');
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [taskFilters, setTaskFilters] = useState<TaskFilters>({});
   const [taskView, setTaskView] = useState<TaskViewType>('grid');
@@ -477,7 +479,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
         // Add rental deals as projects
         if (rentalDeals) {
           const rentalProjects = rentalDeals.map(deal => ({
-            id: deal.project_id, // Use project_id instead of deal.id so tasks can match
+            id: deal.project_id, // Use project_id so tasks can match
             name: deal.project_name,
             description: `Rental Deal: ${deal.deal_type} - ${deal.property_address}`,
             client_id: null,
@@ -487,7 +489,9 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             status: 'active',
             project_type: 'rental',
             created_at: deal.created_at || new Date().toISOString(),
-            updated_at: deal.updated_at || new Date().toISOString()
+            updated_at: deal.updated_at || new Date().toISOString(),
+            // Store the deal.id for navigation
+            deal_id_for_navigation: deal.id
           })) as Project[];
           allProjects.push(...rentalProjects);
         }
@@ -495,7 +499,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
         // Add builder deals as projects
         if (builderDeals) {
           const builderProjects = builderDeals.map(deal => ({
-            id: deal.project_id, // Use project_id instead of deal.id so tasks can match
+            id: deal.project_id, // Use project_id so tasks can match
             name: deal.project_name,
             description: `Builder Deal: ${deal.deal_type} - ${deal.property_address}`,
             client_id: null,
@@ -505,7 +509,9 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             status: 'active',
             project_type: 'builder',
             created_at: deal.created_at || new Date().toISOString(),
-            updated_at: deal.updated_at || new Date().toISOString()
+            updated_at: deal.updated_at || new Date().toISOString(),
+            // Store the deal.id for navigation
+            deal_id_for_navigation: deal.id
           })) as Project[];
           allProjects.push(...builderProjects);
         }
@@ -1116,6 +1122,10 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     console.log('🔍 PM Dashboard My Tasks - My tasks count:', myTasks.length);
     console.log('🔍 PM Dashboard My Tasks - My tasks details:', myTasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id, user_id: t.user_id })));
     
+    // Debug: Show all tasks and their user_ids to understand the assignment
+    console.log('🔍 PM Dashboard My Tasks - All tasks user_ids:', tasks.map(t => ({ id: t.id, name: t.task_name, user_id: t.user_id, assigned_user_ids: t.assigned_user_ids })));
+    console.log('🔍 PM Dashboard My Tasks - Current user ID:', user?.id);
+    
     const filteredMyTasks = filterTasks(taskFilters, myTasks);
     console.log('🔍 PM Dashboard My Tasks - Filtered my tasks count:', filteredMyTasks.length);
 
@@ -1147,7 +1157,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             members={members}
             admins={admins}
             projectManagers={projectManagers}
-            projects={myTasksToDisplay.length > 0 && myTasks.length > 0 
+            projects={filteredMyTasks.length > 0 && myTasks.length > 0 
               ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
               : projects.map(p => ({ id: p.id, name: p.name }))
             }
@@ -1214,7 +1224,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={handleAddTask}
-          availableProjects={myTasksToDisplay.length > 0 && myTasks.length > 0 
+          availableProjects={filteredMyTasks.length > 0 && myTasks.length > 0 
             ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
             : projects.map(p => ({ id: p.id, name: p.name }))
           }
@@ -1400,6 +1410,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                       // Status matches exactly
                     } else if (!project.status) {
                       // Fallback to calculating status from tasks
+                      // For all projects, use project.id (which is now project_id for rental/builder deals)
                       const projectTasks = tasks.filter(task => task.project_id === project.id);
                       const completedTasks = projectTasks.filter(task => task.status === 'completed').length;
                       const inProgressTasks = projectTasks.filter(task => task.status === 'in_progress').length;
@@ -1434,6 +1445,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                   }
                 })
                 .map(project => {
+                  // For all projects, use project.id (which is now project_id for rental/builder deals)
                   const projectTasks = tasks.filter(task => task.project_id === project.id);
                   console.log('🔍 ProjectCard Debug - Project:', project.name, 'Project ID:', project.id);
                   console.log('🔍 ProjectCard Debug - All tasks count:', tasks.length);
