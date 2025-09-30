@@ -253,22 +253,37 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
             className="flex-1 text-sm py-2"
             variant="outline"
             onClick={() => {
+              console.log('🔍 ProjectCard - Documents button clicked');
+              console.log('🔍 ProjectCard - Project:', project.name, 'Type:', project.project_type);
+              console.log('🔍 ProjectCard - Project ID:', project.id);
+              console.log('🔍 ProjectCard - Deal ID for navigation:', (project as any).deal_id_for_navigation);
+              console.log('🔍 ProjectCard - onTabChange available:', !!onTabChange);
+              console.log('🔍 ProjectCard - onProjectSelect available:', !!onProjectSelect);
+              
               if (onTabChange && onProjectSelect) {
                 // PM Dashboard - use internal routing
+                console.log('🔍 ProjectCard - Using internal routing (PM Dashboard)');
                 onProjectSelect(project, project.project_type || 'regular');
                 onTabChange('documents');
               } else {
                 // Admin Dashboard - use external routing
+                console.log('🔍 ProjectCard - Using external routing (Admin Dashboard)');
                 if (project.project_type === 'rental') {
                   // For rental deals, use deal_id_for_navigation if available, otherwise project.id
                   const dealId = (project as any).deal_id_for_navigation || project.id;
-                  navigate(`/rental-deals/${dealId}/documents`);
+                  const path = `/rental-deals/${dealId}/documents`;
+                  console.log('🔍 ProjectCard - Navigating to rental documents:', path);
+                  navigate(path);
                 } else if (project.project_type === 'builder') {
                   // For builder deals, use deal_id_for_navigation if available, otherwise project.id
                   const dealId = (project as any).deal_id_for_navigation || project.id;
-                  navigate(`/builder-deals/${dealId}/documents`);
+                  const path = `/builder-deals/${dealId}/documents`;
+                  console.log('🔍 ProjectCard - Navigating to builder documents:', path);
+                  navigate(path);
                 } else {
-                  navigate(`/projects/${project.id}/documents`);
+                  const path = `/projects/${project.id}/documents`;
+                  console.log('🔍 ProjectCard - Navigating to regular documents:', path);
+                  navigate(path);
                 }
               }
             }}

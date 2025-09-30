@@ -74,14 +74,19 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({ projectId: propProj
   const fetchProject = async () => {
     try {
       setLoading(true);
+      console.log('🔍 ProjectDocuments - fetchProject called with projectId:', projectId);
       const { data, error } = await supabase
         .from('projects')
         .select('id, name, description, client_name, documents')
         .eq('id', projectId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.log('🔍 ProjectDocuments - fetchProject error:', error);
+        throw error;
+      }
 
+      console.log('🔍 ProjectDocuments - fetchProject success:', data);
       setProject(data);
     } catch (error) {
       console.error('Error fetching project:', error);
@@ -93,11 +98,12 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({ projectId: propProj
 
   const fetchDealData = async () => {
     try {
+      console.log('🔍 ProjectDocuments - fetchDealData called with projectId:', projectId);
       // Check rental deals
       const { data: rentalDeal, error: rentalError } = await supabase
         .from('rental_deals')
         .select('*')
-        .eq('id', projectId)
+        .eq('project_id', projectId)
         .single();
 
       if (rentalDeal && !rentalError) {
@@ -106,7 +112,7 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({ projectId: propProj
           name: rentalDeal.project_name,
           description: `Rental Deal: ${rentalDeal.deal_type} - ${rentalDeal.property_address}`,
           client_name: rentalDeal.client_name,
-          documents: rentalDeal.documents || []
+          documents: [] // Documents are stored in projects table, not deals
         });
         return;
       }
@@ -115,7 +121,7 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({ projectId: propProj
       const { data: builderDeal, error: builderError } = await supabase
         .from('builder_deals')
         .select('*')
-        .eq('id', projectId)
+        .eq('project_id', projectId)
         .single();
 
       if (builderDeal && !builderError) {
@@ -124,7 +130,7 @@ const ProjectDocuments: React.FC<ProjectDocumentsProps> = ({ projectId: propProj
           name: builderDeal.project_name,
           description: `Builder Deal: ${builderDeal.deal_type} - ${builderDeal.property_address}`,
           client_name: builderDeal.client_name,
-          documents: builderDeal.documents || []
+          documents: [] // Documents are stored in projects table, not deals
         });
         return;
       }

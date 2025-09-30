@@ -478,41 +478,63 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
 
         // Add rental deals as projects
         if (rentalDeals) {
-          const rentalProjects = rentalDeals.map(deal => ({
-            id: deal.project_id, // Use project_id so tasks can match
-            name: deal.project_name,
-            description: `Rental Deal: ${deal.deal_type} - ${deal.property_address}`,
-            client_id: null,
-            client_name: deal.client_name,
-            start_date: deal.start_date,
-            expected_end_date: deal.end_date,
-            status: 'active',
-            project_type: 'rental',
-            created_at: deal.created_at || new Date().toISOString(),
-            updated_at: deal.updated_at || new Date().toISOString(),
-            // Store the deal.id for navigation
-            deal_id_for_navigation: deal.id
-          })) as Project[];
+          const rentalProjects = rentalDeals.map(deal => {
+            const project = {
+              id: deal.project_id, // Use project_id so tasks can match
+              name: deal.project_name,
+              description: `Rental Deal: ${deal.deal_type} - ${deal.property_address}`,
+              client_id: null,
+              client_name: deal.client_name,
+              start_date: deal.start_date,
+              expected_end_date: deal.end_date,
+              status: 'active',
+              project_type: 'rental',
+              created_at: deal.created_at || new Date().toISOString(),
+              updated_at: deal.updated_at || new Date().toISOString(),
+              // Store the deal.id for navigation
+              deal_id_for_navigation: deal.id
+            } as Project;
+            
+            console.log('🔍 ProjectManagerDashboard - Rental project mapped:', {
+              dealId: deal.id,
+              projectId: deal.project_id,
+              projectName: deal.project_name,
+              dealIdForNavigation: project.deal_id_for_navigation
+            });
+            
+            return project;
+          }) as Project[];
           allProjects.push(...rentalProjects);
         }
 
         // Add builder deals as projects
         if (builderDeals) {
-          const builderProjects = builderDeals.map(deal => ({
-            id: deal.project_id, // Use project_id so tasks can match
-            name: deal.project_name,
-            description: `Builder Deal: ${deal.deal_type} - ${deal.property_address}`,
-            client_id: null,
-            client_name: deal.client_name,
-            start_date: deal.start_date,
-            expected_end_date: deal.end_date,
-            status: 'active',
-            project_type: 'builder',
-            created_at: deal.created_at || new Date().toISOString(),
-            updated_at: deal.updated_at || new Date().toISOString(),
-            // Store the deal.id for navigation
-            deal_id_for_navigation: deal.id
-          })) as Project[];
+          const builderProjects = builderDeals.map(deal => {
+            const project = {
+              id: deal.project_id, // Use project_id so tasks can match
+              name: deal.project_name,
+              description: `Builder Deal: ${deal.deal_type} - ${deal.property_address}`,
+              client_id: null,
+              client_name: deal.client_name,
+              start_date: deal.start_date,
+              expected_end_date: deal.end_date,
+              status: 'active',
+              project_type: 'builder',
+              created_at: deal.created_at || new Date().toISOString(),
+              updated_at: deal.updated_at || new Date().toISOString(),
+              // Store the deal.id for navigation
+              deal_id_for_navigation: deal.id
+            } as Project;
+            
+            console.log('🔍 ProjectManagerDashboard - Builder project mapped:', {
+              dealId: deal.id,
+              projectId: deal.project_id,
+              projectName: deal.project_name,
+              dealIdForNavigation: project.deal_id_for_navigation
+            });
+            
+            return project;
+          }) as Project[];
           allProjects.push(...builderProjects);
         }
 
@@ -1448,8 +1470,11 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
                   // For all projects, use project.id (which is now project_id for rental/builder deals)
                   const projectTasks = tasks.filter(task => task.project_id === project.id);
                   console.log('🔍 ProjectCard Debug - Project:', project.name, 'Project ID:', project.id);
+                  console.log('🔍 ProjectCard Debug - Project Type:', project.project_type);
+                  console.log('🔍 ProjectCard Debug - Deal ID for Navigation:', (project as any).deal_id_for_navigation);
                   console.log('🔍 ProjectCard Debug - All tasks count:', tasks.length);
                   console.log('🔍 ProjectCard Debug - Project tasks count:', projectTasks.length);
+                  console.log('🔍 ProjectCard Debug - Project object:', project);
                   return (
                     <ProjectCard
                       key={project.id}
