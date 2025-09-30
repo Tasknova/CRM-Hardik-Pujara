@@ -477,7 +477,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
         // Add rental deals as projects
         if (rentalDeals) {
           const rentalProjects = rentalDeals.map(deal => ({
-            id: deal.id,
+            id: deal.project_id, // Use project_id instead of deal.id so tasks can match
             name: deal.project_name,
             description: `Rental Deal: ${deal.deal_type} - ${deal.property_address}`,
             client_id: null,
@@ -495,7 +495,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
         // Add builder deals as projects
         if (builderDeals) {
           const builderProjects = builderDeals.map(deal => ({
-            id: deal.id,
+            id: deal.project_id, // Use project_id instead of deal.id so tasks can match
             name: deal.project_name,
             description: `Builder Deal: ${deal.deal_type} - ${deal.property_address}`,
             client_id: null,
@@ -808,8 +808,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
       !task.project_id || assignedProjectIds.includes(task.project_id)
     );
     
-    // TEMPORARY FIX: If no tasks match assigned projects, use all tasks for dashboard stats
-    const filteredTasks = tasksForAssignedProjects.length > 0 ? tasksForAssignedProjects : tasks;
+    const filteredTasks = tasksForAssignedProjects;
     console.log('🔍 PM Dashboard Stats - Using tasks for stats:', filteredTasks.length);
     console.log('🔍 PM Dashboard Stats - Tasks for assigned projects:', tasksForAssignedProjects.length);
 
@@ -940,7 +939,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     console.log('🔍 PM Dashboard - Assigned Projects:', assignedProjects.length);
     console.log('🔍 PM Dashboard - All Tasks:', tasks.length);
     
-    // Filter tasks to only show tasks from assigned projects
+    // Filter tasks to only show tasks from assigned projects (same logic as Admin dashboard)
     const assignedProjectIds = assignedProjects.map(p => p.id);
     console.log('🔍 PM Dashboard - Assigned Project IDs:', assignedProjectIds);
     console.log('🔍 PM Dashboard - All Tasks Details:', tasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
@@ -951,17 +950,11 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     console.log('🔍 PM Dashboard - Tasks for assigned projects:', tasksForAssignedProjects.length);
     console.log('🔍 PM Dashboard - Tasks for assigned projects details:', tasksForAssignedProjects.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id })));
     
-    // TEMPORARY FIX: If no tasks match assigned projects, show all tasks for debugging
-    const tasksToDisplay = tasksForAssignedProjects.length > 0 ? tasksForAssignedProjects : tasks;
-    console.log('🔍 PM Dashboard - Tasks to display (with fallback):', tasksToDisplay.length);
-    
-    const filteredTasksForDisplay = filterTasks(taskFilters, tasksToDisplay);
+    const filteredTasksForDisplay = filterTasks(taskFilters, tasksForAssignedProjects);
     console.log('🔍 PM Dashboard - Filtered tasks for display:', filteredTasksForDisplay.length);
     
     // Debug project filter
-    const projectsForFilter = tasksToDisplay.length > 0 && tasksForAssignedProjects.length > 0 
-      ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
-      : projects.map(p => ({ id: p.id, name: p.name }));
+    const projectsForFilter = assignedProjects.map(p => ({ id: p.id, name: p.name }));
     console.log('🔍 PM Dashboard - Projects for filter:', projectsForFilter.length);
     console.log('🔍 PM Dashboard - Projects for filter details:', projectsForFilter);
 
@@ -1002,7 +995,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
             members={members}
             admins={admins}
             projectManagers={projectManagers}
-            projects={tasksToDisplay.length > 0 && tasksForAssignedProjects.length > 0 
+            projects={tasksForAssignedProjects.length > 0 
               ? assignedProjects.map(p => ({ id: p.id, name: p.name }))
               : projects.map(p => ({ id: p.id, name: p.name }))
             }
@@ -1112,7 +1105,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     console.log('🔍 PM Dashboard My Tasks - Current User ID:', user?.id);
     console.log('🔍 PM Dashboard My Tasks - All Tasks:', tasks.length);
     
-    // Filter tasks to show only tasks assigned to the current project manager from assigned projects
+    // Filter tasks to show only tasks assigned to the current project manager from assigned projects (same logic as Admin dashboard)
     const assignedProjectIds = assignedProjects.map(p => p.id);
     console.log('🔍 PM Dashboard My Tasks - Assigned Project IDs:', assignedProjectIds);
     
@@ -1123,11 +1116,7 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     console.log('🔍 PM Dashboard My Tasks - My tasks count:', myTasks.length);
     console.log('🔍 PM Dashboard My Tasks - My tasks details:', myTasks.map(t => ({ id: t.id, name: t.task_name, project_id: t.project_id, user_id: t.user_id })));
     
-    // TEMPORARY FIX: If no tasks match assigned projects, show all tasks assigned to PM for debugging
-    const myTasksToDisplay = myTasks.length > 0 ? myTasks : tasks.filter(task => task.user_id === user?.id);
-    console.log('🔍 PM Dashboard My Tasks - Tasks to display (with fallback):', myTasksToDisplay.length);
-    
-    const filteredMyTasks = filterTasks(taskFilters, myTasksToDisplay);
+    const filteredMyTasks = filterTasks(taskFilters, myTasks);
     console.log('🔍 PM Dashboard My Tasks - Filtered my tasks count:', filteredMyTasks.length);
 
     return (
