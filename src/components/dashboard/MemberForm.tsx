@@ -4,7 +4,6 @@ import { authService } from '../../services/auth';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { Member, ProjectManager } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface MemberFormProps {
   isOpen: boolean;
@@ -12,9 +11,10 @@ interface MemberFormProps {
   onSuccess: () => void;
   initialData?: Partial<Member> | Partial<ProjectManager>;
   isProjectManager?: boolean;
+  currentUser?: any; // Add currentUser prop
 }
 
-const MemberForm: React.FC<MemberFormProps> = ({ isOpen, onClose, onSuccess, initialData, isProjectManager = false }) => {
+const MemberForm: React.FC<MemberFormProps> = ({ isOpen, onClose, onSuccess, initialData, isProjectManager = false, currentUser }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -25,7 +25,7 @@ const MemberForm: React.FC<MemberFormProps> = ({ isOpen, onClose, onSuccess, ini
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { user } = useAuth();
+  const user = currentUser; // Use the prop instead of the hook
 
   // Use the prop to determine if this is for a Project Manager
 

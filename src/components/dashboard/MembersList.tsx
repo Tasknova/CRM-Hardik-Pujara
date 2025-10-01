@@ -488,14 +488,15 @@ const MembersList: React.FC = () => {
         <MemberForm
           isOpen={isFormOpen}
           onClose={() => { 
-            setIsFormOpen(false); 
-            setSelectedMember(null); 
+            setIsFormOpen(false);
+            setSelectedMember(null);
             setSelectedProjectManager(null);
             setIsEditingProjectManager(false);
           }}
           onSuccess={handleMemberCreated}
           initialData={selectedMember || selectedProjectManager || undefined}
           isProjectManager={isEditingProjectManager}
+          currentUser={user}
         />
       )}
 

@@ -142,7 +142,8 @@ export const authService = {
       
       if (error) {
         console.error('❌ Supabase error:', error);
-        throw new Error(`Error deleting member: ${error.message}`);
+        // Don't throw here, try manual cleanup instead
+        throw new Error('Cascade function failed');
       }
       
       if (data && !data.success) {
@@ -150,7 +151,9 @@ export const authService = {
         throw new Error(data.message || 'Error deleting member');
       }
       
-      console.log('✅ Member deleted successfully:', data);
+      console.log('✅ Member deleted successfully with cascade function:', data);
+      return; // Success, exit early
+      
     } catch (error) {
       // If the cascade function fails, try manual cleanup
       console.log('🔄 Cascade function failed, attempting manual cleanup...');
@@ -159,6 +162,20 @@ export const authService = {
         // Manual cleanup in the correct order
         await this.cleanupMemberReferences(id);
         
+        // Verify that leave balances are deleted before attempting member deletion
+        const { data: remainingBalances, error: checkError } = await supabase
+          .from('member_leave_balances')
+          .select('id')
+          .eq('member_id', id);
+        
+        if (checkError) {
+          console.warn('⚠️ Could not verify leave balances deletion:', checkError.message);
+        } else if (remainingBalances && remainingBalances.length > 0) {
+          console.warn('⚠️ Leave balances still exist, attempting force deletion...');
+          // Force delete any remaining balances
+          await supabase.from('member_leave_balances').delete().eq('member_id', id);
+        }
+        
         // Finally delete the member
         const { error: deleteError } = await supabase
           .from('members')
@@ -166,6 +183,10 @@ export const authService = {
           .eq('id', id);
         
         if (deleteError) {
+          // Check if it's a foreign key constraint error
+          if (deleteError.message.includes('foreign key constraint')) {
+            throw new Error(`Cannot delete member: ${deleteError.message}. Please ensure all related data is cleaned up first.`);
+          }
           throw new Error(`Error deleting member: ${deleteError.message}`);
         }
         
@@ -182,33 +203,133 @@ export const authService = {
     
     // Delete in the correct order to avoid foreign key violations
     const cleanupSteps = [
-      // 1. Delete stage assignments first (they reference tasks)
+      // 1. Delete leave balances FIRST (this is the key constraint that's causing issues)
+      async () => {
+        console.log('🗑️ Deleting member leave balances...');
+        
+        // Try multiple approaches to delete leave balances
+        try {
+          // Approach 1: Direct deletion
+          const { error: memberBalancesError } = await supabase
+            .from('member_leave_balances')
+            .delete()
+            .eq('member_id', memberId);
+          
+          if (memberBalancesError) {
+            console.warn('⚠️ Direct deletion failed:', memberBalancesError.message);
+            
+            // Approach 2: Use RPC function if available
+            try {
+              const { error: rpcError } = await supabase.rpc('delete_member_leave_balances', {
+                target_member_id: memberId
+              });
+              
+              if (rpcError) {
+                console.warn('⚠️ RPC deletion failed:', rpcError.message);
+              } else {
+                console.log('✅ Member leave balances deleted via RPC');
+              }
+            } catch (rpcError) {
+              console.warn('⚠️ RPC function not available or failed:', rpcError);
+            }
+          } else {
+            console.log('✅ Member leave balances deleted directly');
+          }
+        } catch (error) {
+          console.warn('⚠️ All deletion approaches failed for member leave balances:', error);
+        }
+        
+        // Delete PM leave balances
+        try {
+          const { error: pmBalancesError } = await supabase
+            .from('project_manager_leave_balances')
+            .delete()
+            .eq('project_manager_id', memberId);
+          
+          if (pmBalancesError) {
+            console.warn('⚠️ Failed to delete PM leave balances:', pmBalancesError.message);
+          } else {
+            console.log('✅ PM leave balances deleted');
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to delete PM leave balances:', error);
+        }
+        
+        return { error: null };
+      },
+      
+      // 2. Delete leaves
+      async () => {
+        console.log('🗑️ Deleting leaves...');
+        const { error } = await supabase.from('leaves').delete().eq('user_id', memberId);
+        if (error) {
+          console.warn('⚠️ Failed to delete leaves:', error.message);
+        } else {
+          console.log('✅ Leaves deleted');
+        }
+        return { error };
+      },
+      
+      // 3. Delete stage assignments first (they reference tasks)
       () => supabase.from('rental_stage_assignments').delete().eq('member_id', memberId),
       () => supabase.from('builder_stage_assignments').delete().eq('member_id', memberId),
       
-      // 2. Delete team member assignments
+      // 4. Delete team member assignments
       () => supabase.from('rental_deal_team_members').delete().eq('member_id', memberId),
       () => supabase.from('builder_deal_team_members').delete().eq('member_id', memberId),
       
-      // 3. Delete stage assignments where member is assigned_to (check if column exists)
+      // 5. Delete stage assignments where member is assigned_to (check if column exists)
       () => supabase.from('rental_deal_stages').delete().eq('assigned_to', memberId),
       // Skip builder_deal_stages.assigned_to if column doesn't exist
       
-      // 4. Update tasks to remove member from assigned_user_ids (handle JSONB properly)
-      () => supabase
-        .from('tasks')
-        .update({ assigned_user_ids: [] })
-        .contains('assigned_user_ids', [memberId]),
+      // 6. Update tasks to remove member from assigned_user_ids (handle JSONB properly)
+      async () => {
+        try {
+          console.log('🗑️ Updating tasks to remove member from assigned_user_ids...');
+          // Use a direct SQL query to update the JSONB array
+          const { error } = await supabase.rpc('update_tasks_remove_member', {
+            member_id_param: memberId
+          });
+          
+          if (error) {
+            console.warn('⚠️ Failed to update tasks with member removal:', error.message);
+            // Fallback to manual approach - get all tasks and update individually
+            const { data: allTasks, error: fetchError } = await supabase
+              .from('tasks')
+              .select('id, assigned_user_ids');
+            
+            if (!fetchError && allTasks) {
+              for (const task of allTasks) {
+                if (task.assigned_user_ids && task.assigned_user_ids.includes(memberId)) {
+                  const updatedIds = task.assigned_user_ids.filter((id: string) => id !== memberId);
+                  await supabase
+                    .from('tasks')
+                    .update({ assigned_user_ids: updatedIds })
+                    .eq('id', task.id);
+                }
+              }
+            }
+          } else {
+            console.log('✅ Tasks updated to remove member');
+          }
+        } catch (error) {
+          console.warn('⚠️ Task cleanup failed:', error);
+        }
+        
+        return { error: null };
+      },
       
-      // 5. Delete tasks where member is primary assignee
-      () => supabase.from('tasks').delete().eq('user_id', memberId),
-      
-      // 6. Delete leave balances
-      () => supabase.from('member_leave_balances').delete().eq('member_id', memberId),
-      () => supabase.from('project_manager_leave_balances').delete().eq('project_manager_id', memberId),
-      
-      // 7. Delete leaves
-      () => supabase.from('leaves').delete().eq('user_id', memberId),
+      // 7. Delete tasks where member is primary assignee
+      async () => {
+        console.log('🗑️ Deleting tasks where member is primary assignee...');
+        const { error } = await supabase.from('tasks').delete().eq('user_id', memberId);
+        if (error) {
+          console.warn('⚠️ Failed to delete tasks:', error.message);
+        } else {
+          console.log('✅ Tasks deleted');
+        }
+        return { error };
+      },
       
       // 8. Delete notifications
       () => supabase.from('notifications').delete().eq('user_id', memberId),

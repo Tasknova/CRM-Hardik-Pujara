@@ -5,7 +5,8 @@ import { Leave } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
-import { Calendar, User, Clock, CheckCircle2, XCircle, AlertCircle, Filter } from 'lucide-react';
+import Modal from '../ui/Modal';
+import { Calendar, User, Clock, CheckCircle2, XCircle, AlertCircle, Filter, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import LeaveCalendar from './LeaveCalendar';
 import { toast } from 'sonner';
@@ -21,6 +22,7 @@ const AllLeavesPage: React.FC = () => {
   const [memberFilter, setMemberFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [userNames, setUserNames] = useState<Record<string, string>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; leaveId: string | null }>({ isOpen: false, leaveId: null });
 
   useEffect(() => {
     fetchLeaves();
@@ -280,9 +282,13 @@ const AllLeavesPage: React.FC = () => {
         .eq('id', id);
 
       if (error) throw error;
+      
+      toast.success('Leave record deleted successfully');
       fetchLeaves();
+      setDeleteConfirm({ isOpen: false, leaveId: null });
     } catch (error) {
       console.error('Error deleting leave:', error);
+      toast.error('Failed to delete leave record');
     }
   };
 
@@ -589,6 +595,21 @@ const AllLeavesPage: React.FC = () => {
                       </Button>
                     </div>
                   )}
+
+                  {/* Delete button for all leaves - only show for admin users */}
+                  {user?.role === 'admin' && (
+                    <div className="flex justify-end pt-3 border-t border-gray-200">
+                      <Button 
+                        variant="danger" 
+                        size="sm" 
+                        className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                        onClick={() => setDeleteConfirm({ isOpen: true, leaveId: leave.id })}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </Button>
+                    </div>
+                  )}
                 </Card>
               ))
             )}
@@ -603,6 +624,47 @@ const AllLeavesPage: React.FC = () => {
           onDeleteLeave={handleDeleteLeave}
           showUserInfo={true}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.isOpen && (
+        <Modal 
+          isOpen={deleteConfirm.isOpen} 
+          onClose={() => setDeleteConfirm({ isOpen: false, leaveId: null })}
+          title="Delete Leave Record"
+        >
+          <div className="p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Leave Record</h3>
+                <p className="text-sm text-gray-600">This action cannot be undone.</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to delete this leave record? This will permanently remove the leave from the system.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setDeleteConfirm({ isOpen: false, leaveId: null })}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="danger" 
+                onClick={() => deleteConfirm.leaveId && handleDeleteLeave(deleteConfirm.leaveId)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
