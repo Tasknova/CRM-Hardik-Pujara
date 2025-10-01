@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Project, Task } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { Edit2, Trash2, Calendar, Building, Eye, CheckCircle2, Play, Clock, CheckSquare, FileText, Key } from 'lucide-react';
@@ -19,7 +19,32 @@ interface ProjectCardProps {
   onProjectSelect?: (project: Project, type: 'regular' | 'rental' | 'builder') => void; // Add this for PM dashboard
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [], onDelete, onEdit, onProjectUpdate, onTabChange, onProjectSelect }) => {
+// Tooltip component
+const Tooltip: React.FC<{ children: React.ReactNode; content: string; position?: 'top' | 'bottom' }> = ({ children, content, position = 'top' }) => {
+  const [show, setShow] = useState(false);
+  
+  return (
+    <div 
+      className="relative inline-block"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <div className={`absolute z-10 px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg whitespace-nowrap ${
+          position === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'
+        } left-1/2 transform -translate-x-1/2`}>
+          {content}
+          <div className={`absolute w-2 h-2 bg-gray-900 transform rotate-45 ${
+            position === 'top' ? 'top-full -mt-1' : 'bottom-full -mb-1'
+          } left-1/2 -translate-x-1/2`}></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, tasks = [], onDelete, onEdit, onProjectUpdate, onTabChange, onProjectSelect }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -133,7 +158,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
             )}
             {project.project_type && (
               <Badge 
-                variant="outline" 
                 className={`text-xs ${
                   project.project_type === 'rental' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                   project.project_type === 'builder' ? 'bg-green-50 text-green-700 border-green-200' :
@@ -191,33 +215,34 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
         {/* Action Buttons - at bottom */}
         <div className="flex gap-2">
           {/* View Tasks Button - Different navigation for different project types */}
-          <Button
-            className="flex-1 text-sm py-2"
-            variant="primary"
-            onClick={() => {
-              if (onTabChange && onProjectSelect) {
-                // PM Dashboard - use internal routing
-                onProjectSelect(project, project.project_type || 'regular');
-                onTabChange('tasks');
-              } else {
-                // Admin Dashboard - use external routing
-                if (project.project_type === 'rental') {
-                  // For rental deals, use deal_id_for_navigation if available, otherwise project.id
-                  const dealId = (project as any).deal_id_for_navigation || project.id;
-                  navigate(`/rental-deals/${dealId}/tasks`);
-                } else if (project.project_type === 'builder') {
-                  // For builder deals, use deal_id_for_navigation if available, otherwise project.id
-                  const dealId = (project as any).deal_id_for_navigation || project.id;
-                  navigate(`/builder-deals/${dealId}/tasks`);
+          <Tooltip content="View Tasks">
+            <Button
+              className="flex-1 text-sm py-2 px-3"
+              variant="primary"
+              onClick={() => {
+                if (onTabChange && onProjectSelect) {
+                  // PM Dashboard - use internal routing
+                  onProjectSelect(project, project.project_type || 'regular');
+                  onTabChange('tasks');
                 } else {
-                  navigate(`/projects/${project.id}/tasks`);
+                  // Admin Dashboard - use external routing
+                  if (project.project_type === 'rental') {
+                    // For rental deals, use deal_id_for_navigation if available, otherwise project.id
+                    const dealId = (project as any).deal_id_for_navigation || project.id;
+                    navigate(`/rental-deals/${dealId}/tasks`);
+                  } else if (project.project_type === 'builder') {
+                    // For builder deals, use deal_id_for_navigation if available, otherwise project.id
+                    const dealId = (project as any).deal_id_for_navigation || project.id;
+                    navigate(`/builder-deals/${dealId}/tasks`);
+                  } else {
+                    navigate(`/projects/${project.id}/tasks`);
+                  }
                 }
-              }
-            }}
-          >
-            <Eye className="w-4 h-4 mr-2" />
-            View Tasks
-          </Button>
+              }}
+            >
+              <Eye className="w-4 h-4" />
+            </Button>
+          </Tooltip>
           
           {/* Timeline Button - Only for rental/builder deals */}
           {(project.project_type === 'rental' || project.project_type === 'builder') && (
@@ -249,61 +274,63 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
           )}
           
           {/* Documents Button - Different navigation for different project types */}
-          <Button
-            className="flex-1 text-sm py-2"
-            variant="outline"
-            onClick={() => {
-              console.log('🔍 ProjectCard - Documents button clicked');
-              console.log('🔍 ProjectCard - Project:', project.name, 'Type:', project.project_type);
-              console.log('🔍 ProjectCard - Project ID:', project.id);
-              console.log('🔍 ProjectCard - Deal ID for navigation:', (project as any).deal_id_for_navigation);
-              console.log('🔍 ProjectCard - onTabChange available:', !!onTabChange);
-              console.log('🔍 ProjectCard - onProjectSelect available:', !!onProjectSelect);
-              
-              if (onTabChange && onProjectSelect) {
-                // PM Dashboard - use internal routing
-                console.log('🔍 ProjectCard - Using internal routing (PM Dashboard)');
-                onProjectSelect(project, project.project_type || 'regular');
-                onTabChange('documents');
-              } else {
-                // Admin Dashboard - use external routing
-                console.log('🔍 ProjectCard - Using external routing (Admin Dashboard)');
-                if (project.project_type === 'rental') {
-                  // For rental deals, use deal_id_for_navigation if available, otherwise project.id
-                  const dealId = (project as any).deal_id_for_navigation || project.id;
-                  const path = `/rental-deals/${dealId}/documents`;
-                  console.log('🔍 ProjectCard - Navigating to rental documents:', path);
-                  navigate(path);
-                } else if (project.project_type === 'builder') {
-                  // For builder deals, use deal_id_for_navigation if available, otherwise project.id
-                  const dealId = (project as any).deal_id_for_navigation || project.id;
-                  const path = `/builder-deals/${dealId}/documents`;
-                  console.log('🔍 ProjectCard - Navigating to builder documents:', path);
-                  navigate(path);
+          <Tooltip content="Documents">
+            <Button
+              className="flex-1 text-sm py-2 px-3"
+              variant="secondary"
+              onClick={() => {
+                console.log('🔍 ProjectCard - Documents button clicked');
+                console.log('🔍 ProjectCard - Project:', project.name, 'Type:', project.project_type);
+                console.log('🔍 ProjectCard - Project ID:', project.id);
+                console.log('🔍 ProjectCard - Deal ID for navigation:', (project as any).deal_id_for_navigation);
+                console.log('🔍 ProjectCard - onTabChange available:', !!onTabChange);
+                console.log('🔍 ProjectCard - onProjectSelect available:', !!onProjectSelect);
+                
+                if (onTabChange && onProjectSelect) {
+                  // PM Dashboard - use internal routing
+                  console.log('🔍 ProjectCard - Using internal routing (PM Dashboard)');
+                  onProjectSelect(project, project.project_type || 'regular');
+                  onTabChange('documents');
                 } else {
-                  const path = `/projects/${project.id}/documents`;
-                  console.log('🔍 ProjectCard - Navigating to regular documents:', path);
-                  navigate(path);
+                  // Admin Dashboard - use external routing
+                  console.log('🔍 ProjectCard - Using external routing (Admin Dashboard)');
+                  if (project.project_type === 'rental') {
+                    // For rental deals, use deal_id_for_navigation if available, otherwise project.id
+                    const dealId = (project as any).deal_id_for_navigation || project.id;
+                    const path = `/rental-deals/${dealId}/documents`;
+                    console.log('🔍 ProjectCard - Navigating to rental documents:', path);
+                    navigate(path);
+                  } else if (project.project_type === 'builder') {
+                    // For builder deals, use deal_id_for_navigation if available, otherwise project.id
+                    const dealId = (project as any).deal_id_for_navigation || project.id;
+                    const path = `/builder-deals/${dealId}/documents`;
+                    console.log('🔍 ProjectCard - Navigating to builder documents:', path);
+                    navigate(path);
+                  } else {
+                    const path = `/projects/${project.id}/documents`;
+                    console.log('🔍 ProjectCard - Navigating to regular documents:', path);
+                    navigate(path);
+                  }
                 }
-              }
-            }}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Documents
-          </Button>
+              }}
+            >
+              <FileText className="w-4 h-4" />
+            </Button>
+          </Tooltip>
           
           {/* Project Access Button - Only for admins */}
           {user?.role === 'admin' && (
-            <Button
-              className="flex-1 text-sm py-2"
-              variant="outline"
-              onClick={() => {
-                navigate(`/project-access/${project.id}`);
-              }}
-            >
-              <Key className="w-4 h-4 mr-2" />
-              Project Access
-            </Button>
+            <Tooltip content="Project Access">
+              <Button
+                className="flex-1 text-sm py-2 px-3"
+                variant="secondary"
+                onClick={() => {
+                  navigate(`/project-access/${project.id}`);
+                }}
+              >
+                <Key className="w-4 h-4" />
+              </Button>
+            </Tooltip>
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Copy, Eye, EyeOff, Trash2, Plus, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Key, Copy, Eye, EyeOff, Trash2, Plus, CheckCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -24,6 +25,7 @@ interface ProjectAccessManagementProps {
 }
 
 const ProjectAccessManagement: React.FC<ProjectAccessManagementProps> = ({ projectId, projectName }) => {
+  const navigate = useNavigate();
   const [credentials, setCredentials] = useState<ProjectAccessCredential[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -174,9 +176,19 @@ const ProjectAccessManagement: React.FC<ProjectAccessManagementProps> = ({ proje
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Project Access Management</h2>
-          <p className="text-gray-600">Manage access credentials for {projectName}</p>
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="outline"
+            onClick={() => navigate(-1)}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
+          </Button>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Project Access Management</h2>
+            <p className="text-gray-600">Manage access credentials for {projectName}</p>
+          </div>
         </div>
         <Button onClick={() => setShowCreateModal(true)} className="flex items-center space-x-2">
           <Plus className="w-4 h-4" />
