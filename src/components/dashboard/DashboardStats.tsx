@@ -6,23 +6,43 @@ import Card from '../ui/Card';
 interface DashboardStatsProps {
   tasks: Task[];
   leaves: Leave[];
+  userRole?: 'admin' | 'member' | 'project_manager';
+  userId?: string;
+  assignedProjectIds?: string[];
 }
 
-const DashboardStats: React.FC<DashboardStatsProps> = ({ tasks }) => {
+const DashboardStats: React.FC<DashboardStatsProps> = ({ tasks, userRole, userId, assignedProjectIds }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const completedTasks = tasks.filter(task => task.status === 'completed').length;
-  const notStartedTasks = tasks.filter(task => task.status === 'not_started').length;
-  const pendingTasks = tasks.filter(task => task.status === 'pending').length;
-  const inProgressTasks = tasks.filter(task => task.status === 'in_progress').length;
+  // Filter tasks based on user role
+  let filteredTasks = tasks;
+  
+  if (userRole === 'member' && userId) {
+    // Members see only tasks assigned to them
+    filteredTasks = tasks.filter(task => {
+      const assignedIds = task.assigned_user_ids?.filter(id => id) || [];
+      return assignedIds.includes(userId);
+    });
+  } else if (userRole === 'project_manager' && assignedProjectIds) {
+    // Project Managers see only tasks from their assigned projects
+    filteredTasks = tasks.filter(task => 
+      task.project_id && assignedProjectIds.includes(task.project_id)
+    );
+  }
+  // Admins see all tasks (no filtering needed)
+
+  const completedTasks = filteredTasks.filter(task => task.status === 'completed').length;
+  const notStartedTasks = filteredTasks.filter(task => task.status === 'not_started').length;
+  const pendingTasks = filteredTasks.filter(task => task.status === 'pending').length;
+  const inProgressTasks = filteredTasks.filter(task => task.status === 'in_progress').length;
   // Blocked: not completed and due before today, or status 'blocked'
-  const blockedTasks = tasks.filter(task => {
+  const blockedTasks = filteredTasks.filter(task => {
     const due = new Date(task.due_date);
     return (task.status !== 'completed' && due < today) || (task.status as string) === 'blocked';
   }).length;
   // Incomplete Tasks: total of all tasks whose status != completed
-  const incompleteTasks = tasks.filter(task => task.status !== 'completed').length;
+  const incompleteTasks = filteredTasks.filter(task => task.status !== 'completed').length;
 
   const stats = [
     {

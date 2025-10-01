@@ -26,7 +26,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
     user_id: user?.id || '',
     assigned_user_ids: (isMyTasksPage && user?.id) ? [user.id] : [] as string[],
     project_id: initialProjectId || '',
-    priority: '' as Task['priority'],
+    priority: (user?.role === 'member') ? 'medium' as Task['priority'] : '' as Task['priority'],
     status: '' as Task['status'],
     progress: 0,
   });
@@ -98,7 +98,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
         user_id: user?.id || '',
         assigned_user_ids: (isMyTasksPage && user?.id) ? [user.id] : [],
         project_id: initialProjectId || '',
-        priority: '' as Task['priority'],
+        priority: (user?.role === 'member') ? 'medium' as Task['priority'] : '' as Task['priority'],
         status: '' as Task['status'],
         progress: 0
       });
@@ -125,7 +125,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
       user_id: user?.id || '', 
       assigned_user_ids: (isMyTasksPage && user?.id) ? [user.id] : [],
       project_id: initialProjectId || '', 
-      priority: '' as Task['priority'], 
+      priority: (user?.role === 'member') ? 'medium' as Task['priority'] : '' as Task['priority'], 
       status: '' as Task['status'], 
       progress: 0 
     });
@@ -291,24 +291,26 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
            />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Priority
-          </label>
-                     <select
-             name="priority"
-             value={formData.priority}
-             onChange={handleChange}
-             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-             required
-           >
-             <option value="">Select Priority</option>
-             <option value="low">Low</option>
-             <option value="medium">Medium</option>
-             <option value="high">High</option>
-             <option value="urgent">Urgent</option>
-           </select>
-        </div>
+        {(user?.role === 'admin' || user?.role === 'project_manager') && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Priority
+            </label>
+                       <select
+               name="priority"
+               value={formData.priority}
+               onChange={handleChange}
+               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+               required
+             >
+               <option value="">Select Priority</option>
+               <option value="low">Low</option>
+               <option value="medium">Medium</option>
+               <option value="high">High</option>
+               <option value="urgent">Urgent</option>
+             </select>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -498,6 +500,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSubmit, initialP
             </select>
           )}
         </div>
+
 
         {/* Attachments Section */}
         <div>

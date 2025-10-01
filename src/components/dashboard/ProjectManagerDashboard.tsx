@@ -906,7 +906,13 @@ const ProjectManagerDashboard: React.FC<ProjectManagerDashboardProps> = ({ activ
     return (
       <div className="space-y-8 px-2 md:px-8 lg:px-16 pb-8">
 
-        <DashboardStats tasks={filteredTasks} leaves={leaves} />
+        <DashboardStats 
+          tasks={filteredTasks} 
+          leaves={leaves} 
+          userRole="project_manager" 
+          userId={user?.id}
+          assignedProjectIds={assignedProjects.map(p => p.id)}
+        />
         {/* Section title for task overview */}
         <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-2">Task Overview</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

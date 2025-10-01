@@ -373,21 +373,57 @@ export const useLeaves = () => {
     else if (leaveType === 'casual') totalAllocated = balance.casual_leaves;
     else if (leaveType === 'paid') totalAllocated = balance.paid_leaves;
 
-    // 6. Calculate available balance
-    const available = totalAllocated - daysRequested;
+    // 6. Calculate used days from existing leaves (excluding Sundays and holidays)
+    let usedDays = 0;
+    if (existingLeaves && existingLeaves.length > 0) {
+      // Fetch holidays for the current year
+      const currentYear = new Date().getFullYear();
+      const { data: holidays } = await supabase
+        .from('company_holidays')
+        .select('date')
+        .eq('year', currentYear);
+      
+      const holidayDates = new Set(holidays?.map(h => h.date) || []);
+      
+      existingLeaves.forEach(leave => {
+        if (leave.category === 'multi-day' && leave.from_date && leave.to_date) {
+          let d = new Date(leave.from_date);
+          const to = new Date(leave.to_date);
+          while (d <= to) {
+            const dayStr = d.toISOString().split('T')[0];
+            // Count only working days (not Sundays and not holidays)
+            if (d.getDay() !== 0 && !holidayDates.has(dayStr)) {
+              usedDays++;
+            }
+            d.setDate(d.getDate() + 1);
+          }
+        } else if (leave.leave_date) {
+          const dayStr = new Date(leave.leave_date).toISOString().split('T')[0];
+          const leaveDate = new Date(leave.leave_date);
+          // Count only working days (not Sundays and not holidays)
+          if (leaveDate.getDay() !== 0 && !holidayDates.has(dayStr)) {
+            usedDays++;
+          }
+        }
+      });
+    }
+
+    // 7. Calculate available balance
+    const available = totalAllocated - usedDays;
 
     console.log('Leave balance check:', {
       leaveType,
       totalAllocated,
+      usedDays,
       daysRequested,
       available,
       userId
     });
 
-    // 7. Check if enough balance
+    // 8. Check if enough balance
     if (daysRequested > available) {
       toast('❌ Insufficient Leave Balance', {
-        description: `You only have ${available} ${leaveType} leave(s) available (${totalAllocated} total - ${daysRequested} used/pending), but you requested ${daysRequested}.`,
+        description: `You only have ${available} ${leaveType} leave(s) available (${totalAllocated} total - ${usedDays} used/pending), but you requested ${daysRequested}.`,
         style: { background: '#ef4444', color: 'white' },
         duration: 4000,
       });

@@ -5,6 +5,7 @@ import Badge from '../ui/Badge';
 import Modal from '../ui/Modal';
 import { DeleteConfirmationModal } from '../ui/DeleteConfirmationModal';
 import { Task, Project } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Calendar, 
   User, 
@@ -42,6 +43,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   admins = [],
   projectManagers = []
 }) => {
+  const { user } = useAuth();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -183,24 +185,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
-  const getStatusButtonText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'Start Task';
-      case 'in_progress': return 'Complete Task';
-      case 'completed': return 'Reopen Task';
-      case 'not_started': return 'Start Task';
-      case 'blocked': return 'Unblock Task';
-      case 'cancelled': return 'Restart Task';
-      default: return 'Update Status';
-    }
-  };
 
   const getNextStatus = (currentStatus: string) => {
     switch (currentStatus) {
       case 'pending': return 'in_progress';
+      case 'not_started': return 'in_progress';
       case 'in_progress': return 'completed';
       case 'completed': return 'pending';
-      case 'not_started': return 'in_progress';
       case 'blocked': return 'in_progress';
       case 'cancelled': return 'pending';
       default: return 'in_progress';
@@ -363,25 +354,33 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
         {/* Action Buttons - Always at bottom */}
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="flex justify-center space-x-2">
-            {task.status !== 'completed' && (
-              <button
-                onClick={() => onStatusChange(task.id, 'completed')}
-                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 flex items-center space-x-1"
-              >
-                <CheckCircle className="w-3 h-3" />
-                <span>Complete</span>
-              </button>
-            )}
+          <div className="flex justify-center">
             <button
               onClick={handleStatusChange}
               className={`${
                 task.status === 'completed' 
-                  ? 'bg-yellow-600 hover:bg-yellow-700' 
+                  ? 'bg-orange-600 hover:bg-orange-700' 
+                  : task.status === 'in_progress'
+                  ? 'bg-green-600 hover:bg-green-700'
                   : 'bg-blue-600 hover:bg-blue-700'
-              } text-white px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-200 flex items-center space-x-1`}
+              } text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2`}
             >
-              <span>{getStatusButtonText(task.status)}</span>
+              {task.status === 'completed' ? (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Reopen</span>
+                </>
+              ) : task.status === 'in_progress' ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Complete</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Start Task</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -475,6 +474,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             </div>
 
             {/* Project Selection */}
+            {(user?.role === 'admin' || user?.role === 'project_manager') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
                 <select
@@ -489,11 +489,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   ))}
                 </select>
               </div>
+            )}
 
             {/* Assignment Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
-              <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-3">
+            {(user?.role === 'admin' || user?.role === 'project_manager') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
+                <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-3">
                 {/* Members */}
                 {members && members.length > 0 && (
                   <div>
@@ -590,12 +592,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
                   </div>
                 )}
                 </div>
-              {editData.assigned_user_ids.length > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {editData.assigned_user_ids.length} user(s) selected
-                </p>
-              )}
-            </div>
+                  {editData.assigned_user_ids.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {editData.assigned_user_ids.length} user(s) selected
+                    </p>
+                  )}
+              </div>
+            )}
 
             <div className="flex justify-end space-x-3 pt-4">
               <Button

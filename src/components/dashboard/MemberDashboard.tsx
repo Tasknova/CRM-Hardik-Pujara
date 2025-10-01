@@ -80,6 +80,12 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
   const [members, setMembers] = useState<{ id: string; name: string }[]>([]);
   const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
   const [projectManagers, setProjectManagers] = useState<{ id: string; name: string }[]>([]);
+
+  // Filter tasks to only show those assigned to the current member
+  const memberTasks = tasks.filter(task => {
+    const assignedIds = task.assigned_user_ids?.filter(id => id) || [];
+    return assignedIds.includes(user?.id || '');
+  });
   useEffect(() => {
     if (activeTab !== 'leaves' || !user) return;
     const fetchBalance = async () => {
@@ -448,12 +454,16 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
               <TaskCard 
                 key={tasks[0].id} 
                 task={tasks[0]} 
+                onDelete={() => {}}
+                onStatusChange={() => {}}
+                onUpdate={() => {}}
                 showUser={true}
                 section={sectionName}
                 members={members}
                 admins={admins}
                 projectManagers={projectManagers}
                 projects={projects.map(p => ({ id: p.id, name: p.name }))}
+                userRole="member"
               />
             </div>
             {tasks.length > 1 && !openSections[sectionKey] && (
@@ -471,12 +481,16 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
                     <div key={task.id} className="flex h-[28rem] w-full">
                       <TaskCard 
                         task={task} 
+                        onDelete={() => {}}
+                        onStatusChange={() => {}}
+                        onUpdate={() => {}}
                         showUser={true}
                         section={sectionName}
                         members={members}
                         admins={admins}
                         projectManagers={projectManagers}
                         projects={projects.map(p => ({ id: p.id, name: p.name }))}
+                        userRole="member"
                       />
                     </div>
                   ))}
@@ -500,36 +514,37 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isSameDay = (d1, d2) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+    
     // Recently Completed: completed within last 3 days
-    const recentlyCompletedTasks = tasks.filter(task => {
+    const recentlyCompletedTasks = memberTasks.filter(task => {
       if (task.status !== 'completed' || !task.updated_at) return false;
       const updated = new Date(task.updated_at);
       const diff = (today.getTime() - updated.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
       return diff <= 3 && diff >= 0;
     });
     // Due Today: due date is today and not completed
-    const dueTodayTasks = tasks.filter(task => {
+    const dueTodayTasks = memberTasks.filter(task => {
       const due = new Date(task.due_date);
       return isSameDay(due, today) && task.status !== 'completed';
     });
     // Upcoming: due date is within next 3 days (excluding today)
-    const upcomingTasks = tasks.filter(task => {
+    const upcomingTasks = memberTasks.filter(task => {
       const due = new Date(task.due_date);
       const diff = (due.setHours(0,0,0,0) - today.getTime()) / (1000 * 60 * 60 * 24);
       return diff > 0 && diff <= 3;
     });
     // Blocked: overdue and not completed, or status is 'blocked'
-    const blockedTasks = tasks.filter(task => {
+    const blockedTasks = memberTasks.filter(task => {
       const due = new Date(task.due_date);
       due.setHours(0, 0, 0, 0);
       return (task.status !== 'completed' && due < today) || task.status === 'blocked';
     });
 
     // Not Started: tasks with status 'not_started'
-    const notStartedTasks = tasks.filter(task => task.status === 'not_started');
+    const notStartedTasks = memberTasks.filter(task => task.status === 'not_started');
 
     // In Progress: tasks with status 'in_progress'
-    const inProgressTasks = tasks.filter(task => task.status === 'in_progress');
+    const inProgressTasks = memberTasks.filter(task => task.status === 'in_progress');
     // Icons
     return (
       <div className="space-y-8 px-2 md:px-8 lg:px-16 pb-8">
@@ -539,7 +554,12 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
             Dashboard
           </div>
         </div>
-        <DashboardStats tasks={tasks} leaves={leaves} />
+        <DashboardStats 
+          tasks={tasks} 
+          leaves={leaves} 
+          userRole="member" 
+          userId={user?.id} 
+        />
         {/* Task sections grid */}
         <h2 className="text-xl font-semibold text-gray-800 mt-10 mb-2">Task Overview</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -664,6 +684,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
                         admins={admins}
                         projectManagers={projectManagers}
                         projects={projects.map(p => ({ id: p.id, name: p.name }))}
+                        userRole="member"
                       />
                     </div>
                   ))
@@ -705,6 +726,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
           isOpen={isTaskFormOpen}
           onClose={() => setIsTaskFormOpen(false)}
           onSubmit={addTask}
+          isMyTasksPage={true}
         />
       </div>
     );
@@ -848,7 +870,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
                         // Status matches exactly
                       } else if (!project.status) {
                         // Fallback to calculating status from tasks
-                        const projectTasks = tasks.filter(task => task.project_id === project.id);
+                        const projectTasks = memberTasks.filter(task => task.project_id === project.id);
                         const completedTasks = projectTasks.filter(task => task.status === 'completed').length;
                         const inProgressTasks = projectTasks.filter(task => task.status === 'in_progress').length;
                         const projectStatus = completedTasks === projectTasks.length && projectTasks.length > 0 ? 'completed' : 
@@ -882,7 +904,7 @@ const MemberDashboard: React.FC<MemberDashboardProps> = ({ activeTab }) => {
                     }
                   })
                   .map(project => {
-                    const projectTasks = tasks.filter(task => task.project_id === project.id);
+                    const projectTasks = memberTasks.filter(task => task.project_id === project.id);
                     return (
                       <ProjectCard key={project.id} project={project} tasks={projectTasks} />
                     );
