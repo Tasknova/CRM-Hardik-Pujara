@@ -7,6 +7,7 @@ interface CardProps {
   hover?: boolean;
   animated?: boolean;
   accentColor?: string; // e.g. 'border-blue-500'
+  onClick?: () => void;
 }
 
 const Card: React.FC<CardProps> = ({ 
@@ -15,7 +16,8 @@ const Card: React.FC<CardProps> = ({
   padding = 'md',
   hover = false,
   animated = false,
-  accentColor
+  accentColor,
+  onClick
 }) => {
   const paddingClasses = {
     sm: 'p-4',
@@ -34,11 +36,13 @@ const Card: React.FC<CardProps> = ({
         ${hasCustomBackground ? '' : 'bg-white'} rounded-xl shadow-sm border border-gray-200
         ${paddingClasses[padding]}
         ${hover ? 'hover:shadow-lg hover:-translate-y-1 transition-all duration-200' : ''}
+        ${onClick ? 'cursor-pointer' : ''}
         ${animationClass}
         ${accentClass}
         ${className}
       `}
-      tabIndex={0}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
     >
       {children}
     </div>

@@ -18,6 +18,11 @@ import ProjectTasksPageWrapper from './components/dashboard/ProjectTasksPageWrap
 import ProjectDocumentsWrapper from './components/dashboard/ProjectDocumentsWrapper';
 import RentalDealTimelineWrapper from './components/dashboard/RentalDealTimelineWrapper';
 import BuilderDealTimelineWrapper from './components/dashboard/BuilderDealTimelineWrapper';
+import ProjectAccessManagementWrapper from './components/dashboard/ProjectAccessManagementWrapper';
+import ProjectAccessLogin from './components/dashboard/ProjectAccessLogin';
+import ProjectAccessDashboard from './components/dashboard/ProjectAccessDashboard';
+import ProjectAccessTasksWrapper from './components/dashboard/ProjectAccessTasksWrapper';
+import ProjectAccessDocumentsWrapper from './components/dashboard/ProjectAccessDocumentsWrapper';
 import Footer from './components/layout/Footer';
 import { supabase } from './lib/supabase';
 import NotificationsPage from './components/dashboard/NotificationsPage';
@@ -127,6 +132,10 @@ const AppContent: React.FC = () => {
         }}
       >
         <Routes>
+          {/* Project Access Management - Admin only */}
+          <Route path="/project-access/:projectId" element={<ProjectAccessManagementWrapper />} />
+          
+          {/* Regular Project Routes */}
           <Route path="/projects/:projectId/tasks" element={<ProjectTasksPage />} />
           <Route path="/projects/:projectId/documents" element={<ProjectDocuments />} />
           <Route path="/rental-deals/:dealId/tasks" element={<ProjectTasksPageWrapper />} />
@@ -169,6 +178,14 @@ const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* External Project Access Routes - Outside admin layout */}
+          <Route path="/project-access/login" element={<ProjectAccessLogin />} />
+          <Route path="/project-access/dashboard/:projectId" element={<ProjectAccessDashboard />} />
+          <Route path="/project-access/timeline/:projectId" element={<ProjectAccessTasksWrapper />} />
+          <Route path="/project-access/tasks/:projectId" element={<ProjectAccessTasksWrapper />} />
+          <Route path="/project-access/documents/:projectId" element={<ProjectAccessDocumentsWrapper />} />
+          
+          {/* Main App Routes - Inside admin layout */}
           <Route path="*" element={<AppContent />} />
         </Routes>
       </BrowserRouter>

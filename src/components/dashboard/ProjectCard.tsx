@@ -1,7 +1,7 @@
 import React from 'react';
 import { Project, Task } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { Edit2, Trash2, Calendar, Building, Eye, CheckCircle2, Play, Clock, CheckSquare, FileText } from 'lucide-react';
+import { Edit2, Trash2, Calendar, Building, Eye, CheckCircle2, Play, Clock, CheckSquare, FileText, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -291,6 +291,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, isAdmin, tasks = [],
             <FileText className="w-4 h-4 mr-2" />
             Documents
           </Button>
+          
+          {/* Project Access Button - Only for admins */}
+          {user?.role === 'admin' && (
+            <Button
+              className="flex-1 text-sm py-2"
+              variant="outline"
+              onClick={() => {
+                navigate(`/project-access/${project.id}`);
+              }}
+            >
+              <Key className="w-4 h-4 mr-2" />
+              Project Access
+            </Button>
+          )}
         </div>
       </div>
     </Card>
