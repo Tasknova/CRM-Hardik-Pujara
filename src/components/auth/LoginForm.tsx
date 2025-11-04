@@ -28,10 +28,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ role, onBack }) => {
     <Card className="w-full max-w-md">
       <div className="text-center mb-6">
         <div className="flex justify-center mb-4">
-          <div className="flex items-center space-x-2">
-            <div className="text-3xl">🏢</div>
-            <h1 className="text-2xl font-bold text-gray-800">Propazone</h1>
-          </div>
+          <img src="/logoFinal.png" alt="Propazone Logo" className="h-16 w-auto" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900">
           {role === 'admin' ? 'Admin' : role === 'project_manager' ? 'Project Manager' : 'Team Member'} Login

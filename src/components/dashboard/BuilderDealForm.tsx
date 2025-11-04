@@ -24,6 +24,16 @@ interface Client {
   address?: string;
 }
 
+interface Broker {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  company_name?: string;
+  license_number?: string;
+}
+
 interface TeamMember {
   id: string;
   name: string;
@@ -60,6 +70,16 @@ interface DealFormData {
   client_email: string;
   client_phone: string;
   client_address: string;
+  
+  // Broker information
+  is_client_broker: boolean;
+  broker_id?: string;
+  broker_name: string;
+  broker_email: string;
+  broker_phone: string;
+  broker_address: string;
+  broker_company_name: string;
+  broker_license_number: string;
   
   // Deal details
   commission_percentage: string;
@@ -104,6 +124,13 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
     client_email: '',
     client_phone: '',
     client_address: '',
+    is_client_broker: false,
+    broker_name: '',
+    broker_email: '',
+    broker_phone: '',
+    broker_address: '',
+    broker_company_name: '',
+    broker_license_number: '',
     commission_percentage: '',
     commission_amount: '',
     booking_amount: '',
@@ -120,6 +147,7 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
 
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [brokers, setBrokers] = useState<Broker[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loanProviders, setLoanProviders] = useState<LoanProvider[]>([]);
   const [projectManagers, setProjectManagers] = useState<TeamMember[]>([]);
@@ -127,13 +155,16 @@ const BuilderDealForm: React.FC<BuilderDealFormProps> = ({ dealType, onBack, onS
   const [showNewClientModal, setShowNewClientModal] = useState(false);
   const [showNewBuilderModal, setShowNewBuilderModal] = useState(false);
   const [showNewLoanProviderModal, setShowNewLoanProviderModal] = useState(false);
+  const [showNewBrokerModal, setShowNewBrokerModal] = useState(false);
   const [pendingClientName, setPendingClientName] = useState('');
   const [pendingBuilderName, setPendingBuilderName] = useState('');
   const [pendingLoanProviderName, setPendingLoanProviderName] = useState('');
+  const [pendingBrokerName, setPendingBrokerName] = useState('');
 
   useEffect(() => {
     fetchBuilders();
     fetchClients();
+    fetchBrokers();
     fetchTeamMembers();
     fetchLoanProviders();
     fetchProjectManagers();

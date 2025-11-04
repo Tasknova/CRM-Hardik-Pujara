@@ -135,19 +135,19 @@ export const authService = {
     
     try {
       // First, try the cascade function
-      const { data, error } = await supabase
-        .rpc('delete_member_with_cascade', { target_member_id: id });
-      
-      console.log('📊 Delete member response:', { data, error });
-      
-      if (error) {
-        console.error('❌ Supabase error:', error);
+    const { data, error } = await supabase
+      .rpc('delete_member_with_cascade', { target_member_id: id });
+    
+    console.log('📊 Delete member response:', { data, error });
+    
+    if (error) {
+      console.error('❌ Supabase error:', error);
         // Don't throw here, try manual cleanup instead
         throw new Error('Cascade function failed');
-      }
-      
-      if (data && !data.success) {
-        console.error('❌ Function returned error:', data);
+    }
+    
+    if (data && !data.success) {
+      console.error('❌ Function returned error:', data);
         throw new Error(data.message || 'Error deleting member');
       }
       

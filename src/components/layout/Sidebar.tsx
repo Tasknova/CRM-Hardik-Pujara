@@ -66,6 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'all-leaves', label: 'All Leaves', icon: CalendarRange },
     { id: 'company-holidays', label: 'Company Holidays', icon: CalendarRange },
     { id: 'team-members', label: 'Team Members', icon: Users },
+    { id: 'project-manager-management', label: 'PM Management', icon: Users },
     { id: 'reports', label: 'Reports', icon: BarChart2 },
     { id: 'projects', label: 'Projects', icon: Folder },
     { id: 'admin-management', label: 'Admin Management', icon: Shield },
@@ -81,10 +82,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
     { id: 'clients', label: 'Clients', icon: UserCheck },
     { id: 'owners', label: 'Owners', icon: Building },
     { id: 'builders', label: 'Builders', icon: Factory },
+    { id: 'brokers', label: 'Brokers', icon: UserCheck },
     { id: 'loan-providers', label: 'Loan Providers', icon: CreditCard },
     { id: 'projects', label: 'Projects', icon: Folder },
     { id: 'document-hub', label: 'Document Hub', icon: FileText },
-    { id: 'project-managers', label: 'PM Management', icon: Users },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
@@ -154,11 +155,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
        <div className="flex items-center justify-center h-16 px-4 border-b border-blue-200">
          {isOpen ? (
            <div className="flex items-center space-x-2">
-             <div className="text-2xl">🏢</div>
+             <img src="/logoFinal.png" alt="Propazone Logo" className="h-8 w-auto" />
              <h1 className="text-xl font-bold text-gray-800">Propazone</h1>
            </div>
          ) : (
-           <div className="text-2xl">🏢</div>
+           <img src="/logoFinal.png" alt="Propazone Logo" className="h-8 w-auto" />
          )}
        </div>
 

@@ -84,14 +84,25 @@ const ProjectAccessLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4">
+      {/* Propazone Branding */}
+      <div className="text-center mb-8">
+        <div className="flex justify-center mb-4">
+          <div className="bg-white p-4 rounded-full shadow-xl border-4 border-blue-100">
+            <div className="flex items-center justify-center">
+              <img src="/logoFinal.png" alt="Propazone Logo" className="h-14 w-auto" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="w-full max-w-md">
         <Card className="p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Key className="w-8 h-8 text-blue-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Project Access</h1>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Project Access</h2>
             <p className="text-gray-600">Enter your project credentials to access the project</p>
           </div>
 

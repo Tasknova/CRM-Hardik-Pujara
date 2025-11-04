@@ -52,6 +52,7 @@ import BuilderPropertyPage from './BuilderPropertyPage';
 import ClientsPage from './ClientsPage';
 import OwnersPage from './OwnersPage';
 import BuildersPage from './BuildersPage';
+import BrokersPage from './BrokersPage';
 import LoanProvidersPage from './LoanProvidersPage';
 import DocumentHub from './DocumentHub';
 
@@ -2862,6 +2863,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
           {activeTab === 'clients' && <ClientsPage />}
           {activeTab === 'owners' && <OwnersPage />}
           {activeTab === 'builders' && <BuildersPage />}
+          {activeTab === 'brokers' && <BrokersPage />}
           {activeTab === 'loan-providers' && <LoanProvidersPage />}
           {activeTab === 'projects' && (
             <div className="space-y-6">
@@ -2879,7 +2881,6 @@ const handleDeleteHoliday = async (holidayId: string) => {
             </div>
           )}
           {activeTab === 'document-hub' && <DocumentHub />}
-          {activeTab === 'project-managers' && <ProjectManagerManagement />}
           {activeTab === 'profile' && <AdminProfile />}
         </>
       )}
@@ -3290,6 +3291,7 @@ const handleDeleteHoliday = async (holidayId: string) => {
             </div>
           )}
           {activeTab === 'team-members' && <MembersList />}
+          {activeTab === 'project-manager-management' && <ProjectManagerManagement />}
           {activeTab === 'reports' && <Reports />}
           {activeTab === 'projects' && (
             <div className="space-y-6">

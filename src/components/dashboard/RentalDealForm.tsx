@@ -8,6 +8,7 @@ import RentalDealTimeline from './RentalDealTimeline';
 import AutocompleteInput from '../ui/AutocompleteInput';
 import NewClientModal from '../ui/NewClientModal';
 import NewOwnerModal from '../ui/NewOwnerModal';
+import NewBrokerModal from '../ui/NewBrokerModal';
 
 interface RentalDealFormProps {
   dealType: 'residential' | 'commercial';
@@ -38,6 +39,16 @@ interface Owner {
   address?: string;
 }
 
+interface Broker {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  company_name?: string;
+  license_number?: string;
+}
+
 interface DealFormData {
   project_name: string;
   client_name: string;
@@ -60,6 +71,14 @@ interface DealFormData {
   client_id?: string;
   owner_id?: string;
   project_manager_id?: string;
+  is_client_broker: boolean;
+  broker_id?: string;
+  broker_name: string;
+  broker_email: string;
+  broker_phone: string;
+  broker_address: string;
+  broker_company_name: string;
+  broker_license_number: string;
 }
 
 const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editDealId }) => {
@@ -82,28 +101,40 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     end_date: '',
     team_members: [],
     additional_notes: '',
-    project_manager_id: ''
+    project_manager_id: '',
+    is_client_broker: false,
+    broker_name: '',
+    broker_email: '',
+    broker_phone: '',
+    broker_address: '',
+    broker_company_name: '',
+    broker_license_number: ''
   });
   
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
+  const [brokers, setBrokers] = useState<Broker[]>([]);
   const [projectManagers, setProjectManagers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [ownersLoading, setOwnersLoading] = useState(false);
+  const [brokersLoading, setBrokersLoading] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
   const [createdDealId, setCreatedDealId] = useState<string | null>(null);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
   const [showNewOwnerModal, setShowNewOwnerModal] = useState(false);
+  const [showNewBrokerModal, setShowNewBrokerModal] = useState(false);
   const [pendingClientName, setPendingClientName] = useState('');
   const [pendingOwnerName, setPendingOwnerName] = useState('');
+  const [pendingBrokerName, setPendingBrokerName] = useState('');
 
   // Fetch data on component mount
   useEffect(() => {
     fetchTeamMembers();
     fetchClients();
     fetchOwners();
+    fetchBrokers();
     fetchProjectManagers();
   }, []);
 
@@ -173,6 +204,24 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     }
   };
 
+  const fetchBrokers = async () => {
+    try {
+      setBrokersLoading(true);
+      const { data, error } = await supabase
+        .from('brokers')
+        .select('id, name, email, phone, address, company_name, license_number')
+        .order('name');
+
+      if (error) throw error;
+      setBrokers(data || []);
+    } catch (error) {
+      console.error('Error fetching brokers:', error);
+      toast.error('Failed to load brokers');
+    } finally {
+      setBrokersLoading(false);
+    }
+  };
+
   const fetchProjectManagers = async () => {
     try {
       const { data, error } = await supabase
@@ -232,7 +281,15 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
           team_members: data.team_members || [],
           additional_notes: data.additional_notes || '',
           owner_id: data.owner_id,
-          project_manager_id: data.project_manager_id || ''
+          project_manager_id: data.project_manager_id || '',
+          is_client_broker: data.is_client_broker || false,
+          broker_id: data.broker_id,
+          broker_name: data.broker_name || '',
+          broker_email: data.broker_email || '',
+          broker_phone: data.broker_phone || '',
+          broker_address: data.broker_address || '',
+          broker_company_name: data.broker_company_name || '',
+          broker_license_number: data.broker_license_number || ''
         });
       }
     } catch (error) {
@@ -300,6 +357,40 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     }
   };
 
+  const handleBrokerSelect = async (broker: Broker | null) => {
+    if (!broker) {
+      setFormData(prev => ({ 
+        ...prev, 
+        broker_id: undefined, 
+        broker_name: '', 
+        broker_email: '', 
+        broker_phone: '', 
+        broker_address: '',
+        broker_company_name: '',
+        broker_license_number: ''
+      }));
+      return;
+    }
+
+    if (broker.id === 'new') {
+      // Show modal to create new broker
+      setPendingBrokerName(broker.name);
+      setShowNewBrokerModal(true);
+    } else {
+      // Select existing broker
+      setFormData(prev => ({ 
+        ...prev, 
+        broker_id: broker.id,
+        broker_name: broker.name,
+        broker_email: broker.email || '',
+        broker_phone: broker.phone || '',
+        broker_address: broker.address || '',
+        broker_company_name: broker.company_name || '',
+        broker_license_number: broker.license_number || ''
+      }));
+    }
+  };
+
   const handleNewClientSuccess = (client: { id: string; name: string; email?: string; phone?: string; address?: string }) => {
     setFormData(prev => ({ 
       ...prev, 
@@ -326,19 +417,71 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
     setPendingOwnerName('');
   };
 
+  const handleNewBrokerSuccess = (broker: { id: string; name: string; email?: string; phone?: string; address?: string; company_name?: string; license_number?: string }) => {
+    setFormData(prev => ({ 
+      ...prev, 
+      broker_id: broker.id,
+      broker_name: broker.name,
+      broker_email: broker.email || '',
+      broker_phone: broker.phone || '',
+      broker_address: broker.address || '',
+      broker_company_name: broker.company_name || '',
+      broker_license_number: broker.license_number || ''
+    }));
+    fetchBrokers(); // Refresh the brokers list
+    setShowNewBrokerModal(false);
+    setPendingBrokerName('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       // Validate required fields
-      if (!formData.project_name || !formData.client_name || !formData.owner_name || !formData.property_address) {
+      if (!formData.project_name || !formData.owner_name || !formData.property_address) {
         toast.error('Please fill in all required fields');
         return;
       }
 
+      // Validate client/broker information based on type
+      if (formData.is_client_broker) {
+        // If client is broker, validate broker fields
+        if (!formData.broker_name || !formData.broker_email || !formData.broker_phone) {
+          toast.error('Please fill in all broker information fields');
+          return;
+        }
+      } else {
+        // If client is not broker, validate client fields
+        if (!formData.client_name) {
+          toast.error('Please fill in client name');
+          return;
+        }
+      }
+
       let projectData: any;
       let dealData: any;
+      let brokerData: any = null;
+
+      // Create broker if client is broker and broker doesn't exist
+      if (formData.is_client_broker && !formData.broker_id) {
+        const { data: newBroker, error: brokerError } = await supabase
+          .from('brokers')
+          .insert([{
+            name: formData.broker_name,
+            email: formData.broker_email,
+            phone: formData.broker_phone,
+            address: formData.broker_address,
+            company_name: formData.broker_company_name,
+            license_number: formData.broker_license_number
+          }])
+          .select()
+          .single();
+
+        if (brokerError) throw brokerError;
+        brokerData = newBroker;
+        setFormData(prev => ({ ...prev, broker_id: newBroker.id }));
+      }
 
       if (editDealId) {
         // Update existing deal
@@ -351,12 +494,13 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
         if (fetchError) throw fetchError;
 
         // Update the project
+        const clientName = formData.is_client_broker ? formData.broker_name : formData.client_name;
         const { data: updatedProject, error: projectError } = await supabase
           .from('projects')
           .update({
             name: formData.project_name,
-            description: `${dealType} rental deal for ${formData.client_name}`,
-            client_name: formData.client_name,
+            description: `${dealType} rental deal for ${clientName}`,
+            client_name: clientName,
             start_date: formData.start_date,
             expected_end_date: formData.end_date,
             status: 'active'
@@ -374,9 +518,9 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
           .update({
             project_name: formData.project_name,
             deal_type: dealType,
-            client_name: formData.client_name,
-            client_email: formData.client_email,
-            client_phone: formData.client_phone,
+            client_name: clientName,
+            client_email: formData.is_client_broker ? formData.broker_email : formData.client_email,
+            client_phone: formData.is_client_broker ? formData.broker_phone : formData.client_phone,
             owner_name: formData.owner_name,
             owner_email: formData.owner_email,
             owner_phone: formData.owner_phone,
@@ -392,7 +536,9 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
             current_stage: 1,
             client_id: formData.client_id,
             owner_id: formData.owner_id,
-            project_manager_id: formData.project_manager_id || null
+            project_manager_id: formData.project_manager_id || null,
+            is_client_broker: formData.is_client_broker,
+            broker_id: formData.broker_id || brokerData?.id
           })
           .eq('id', editDealId)
           .select()
@@ -427,12 +573,13 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
       } else {
         // Create new deal
         // First, create a project for this rental deal
+        const clientName = formData.is_client_broker ? formData.broker_name : formData.client_name;
         const { data: newProjectData, error: projectError } = await supabase
           .from('projects')
           .insert([{
             name: formData.project_name,
-            description: `${dealType} rental deal for ${formData.client_name}`,
-            client_name: formData.client_name,
+            description: `${dealType} rental deal for ${clientName}`,
+            client_name: clientName,
             start_date: formData.start_date,
             expected_end_date: formData.end_date,
             status: 'active'
@@ -449,9 +596,9 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
           .insert([{
             project_name: formData.project_name,
             deal_type: dealType,
-            client_name: formData.client_name,
-            client_email: formData.client_email,
-            client_phone: formData.client_phone,
+            client_name: clientName,
+            client_email: formData.is_client_broker ? formData.broker_email : formData.client_email,
+            client_phone: formData.is_client_broker ? formData.broker_phone : formData.client_phone,
             owner_name: formData.owner_name,
             owner_email: formData.owner_email,
             owner_phone: formData.owner_phone,
@@ -467,6 +614,8 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
             current_stage: 1,
             client_id: formData.client_id,
             owner_id: formData.owner_id,
+            is_client_broker: formData.is_client_broker,
+            broker_id: formData.broker_id || brokerData?.id,
             project_id: projectData.id,
             project_manager_id: formData.project_manager_id || null
           }])
@@ -650,66 +799,185 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
               </div>
             </Card>
 
-            {/* Client Information */}
+            {/* Client Information - Only show if client is NOT a broker */}
+            {!formData.is_client_broker && (
+              <Card className="p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <User className="w-5 h-5 text-green-600" />
+                  <h2 className="text-xl font-semibold text-gray-900">Client Information</h2>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <AutocompleteInput
+                    label="Client Name"
+                    placeholder="Enter or select client name"
+                    value={formData.client_name}
+                    onChange={(value) => handleInputChange('client_name', value)}
+                    onSelect={handleClientSelect}
+                    options={clients}
+                    loading={clientsLoading}
+                    required={true}
+                    icon={<User className="w-4 h-4" />}
+                  />
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Client Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.client_email}
+                      onChange={(e) => handleInputChange('client_email', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter client email"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Client Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.client_phone}
+                      onChange={(e) => handleInputChange('client_phone', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter client phone"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Client Address
+                    </label>
+                    <textarea
+                      value={formData.client_address}
+                      onChange={(e) => handleInputChange('client_address', e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter client address"
+                    />
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Is Client Broker Checkbox - Always show */}
             <Card className="p-6">
               <div className="flex items-center space-x-2 mb-4">
-                <User className="w-5 h-5 text-green-600" />
-                <h2 className="text-xl font-semibold text-gray-900">Client Information</h2>
+                <User className="w-5 h-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Client Type</h2>
               </div>
               
-              <div className="grid md:grid-cols-2 gap-4">
-                <AutocompleteInput
-                  label="Client Name"
-                  placeholder="Enter or select client name"
-                  value={formData.client_name}
-                  onChange={(value) => handleInputChange('client_name', value)}
-                  onSelect={handleClientSelect}
-                  options={clients}
-                  loading={clientsLoading}
-                  required={true}
-                  icon={<User className="w-4 h-4" />}
-                />
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Client Email
-                  </label>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-3">
                   <input
-                    type="email"
-                    value={formData.client_email}
-                    onChange={(e) => handleInputChange('client_email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter client email"
+                    type="checkbox"
+                    id="is_client_broker"
+                    checked={formData.is_client_broker}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_client_broker: e.target.checked }))}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                   />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Client Phone
+                  <label htmlFor="is_client_broker" className="text-sm font-medium text-gray-700">
+                    Is Client a Broker?
                   </label>
-                  <input
-                    type="tel"
-                    value={formData.client_phone}
-                    onChange={(e) => handleInputChange('client_phone', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter client phone"
-                  />
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Client Address
-                  </label>
-                  <textarea
-                    value={formData.client_address}
-                    onChange={(e) => handleInputChange('client_address', e.target.value)}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter client address"
-                  />
-                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Check this if the client is a real estate broker. This will show broker information fields instead of client fields.
+                </p>
               </div>
             </Card>
+
+            {/* Broker Information - Only show if client is broker */}
+            {formData.is_client_broker && (
+              <Card className="p-6">
+                <div className="flex items-center space-x-2 mb-4">
+                  <User className="w-5 h-5 text-orange-600" />
+                  <h2 className="text-xl font-semibold text-gray-900">Broker Information</h2>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <AutocompleteInput
+                    label="Broker Name"
+                    placeholder="Enter or select broker name"
+                    value={formData.broker_name}
+                    onChange={(value) => handleInputChange('broker_name', value)}
+                    onSelect={handleBrokerSelect}
+                    options={brokers}
+                    loading={brokersLoading}
+                    required={true}
+                    icon={<User className="w-4 h-4" />}
+                  />
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Broker Email
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.broker_email}
+                      onChange={(e) => handleInputChange('broker_email', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter broker email"
+                      required={formData.is_client_broker}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Broker Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.broker_phone}
+                      onChange={(e) => handleInputChange('broker_phone', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter broker phone"
+                      required={formData.is_client_broker}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Company Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.broker_company_name}
+                      onChange={(e) => handleInputChange('broker_company_name', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter company name"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      License Number
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.broker_license_number}
+                      onChange={(e) => handleInputChange('broker_license_number', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter license number"
+                    />
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Broker Address
+                    </label>
+                    <textarea
+                      value={formData.broker_address}
+                      onChange={(e) => handleInputChange('broker_address', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter broker address"
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* Owner Information */}
             <Card className="p-6">
@@ -944,6 +1212,17 @@ const RentalDealForm: React.FC<RentalDealFormProps> = ({ dealType, onBack, editD
         }}
         onSuccess={handleNewOwnerSuccess}
         initialName={pendingOwnerName}
+      />
+
+      {/* New Broker Modal */}
+      <NewBrokerModal
+        isOpen={showNewBrokerModal}
+        onClose={() => {
+          setShowNewBrokerModal(false);
+          setPendingBrokerName('');
+        }}
+        onSuccess={handleNewBrokerSuccess}
+        initialName={pendingBrokerName}
       />
     </div>
   );

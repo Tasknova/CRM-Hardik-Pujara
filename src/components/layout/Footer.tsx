@@ -5,7 +5,7 @@ const Footer: React.FC = () => (
     <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between text-sm text-gray-600">
       <div className="flex items-center">
         <div className="flex items-center space-x-1 mr-2">
-          <div className="text-lg">🏢</div>
+          <img src="/logoFinal.png" alt="Propazone Logo" className="h-5 w-auto" />
           <span className="font-bold text-gray-800">Propazone</span>
         </div>
         <span>© {new Date().getFullYear()} Propazone. All rights reserved.</span>
