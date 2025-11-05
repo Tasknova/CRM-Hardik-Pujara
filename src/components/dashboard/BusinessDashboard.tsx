@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, DollarSign, TrendingUp, Calendar, FileText, Home, Building, UserCheck, BarChart3 } from 'lucide-react';
+import { Building2, Users, DollarSign, TrendingUp, FileText, Home, Building, UserCheck, BarChart3 } from 'lucide-react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
@@ -29,24 +29,31 @@ interface BusinessStats {
   // Financial Metrics
   totalRentalValue: number;
   totalBuilderValue: number;
+  totalResaleValue: number;
   totalCommission: number;
   rentalCommissionIncome: number;
+  resaleCommissionIncome: number;
   
   // Income Metrics
   completedRentalIncome: number;
   completedBuilderIncome: number;
+  completedResaleIncome: number;
   upcomingRentalIncome: number;
   upcomingBuilderIncome: number;
+  upcomingResaleIncome: number;
   
   // Status Counts
   activeRentalDeals: number;
   activeBuilderDeals: number;
+  activeResaleDeals: number;
   completedRentalDeals: number;
   completedBuilderDeals: number;
+  completedResaleDeals: number;
   
   // Recent Activity
   recentRentalDeals: any[];
   recentBuilderDeals: any[];
+  recentResaleDeals: any[];
   topClients: any[];
 }
 
@@ -71,24 +78,31 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
     // Financial Metrics
     totalRentalValue: 0,
     totalBuilderValue: 0,
+    totalResaleValue: 0,
     totalCommission: 0,
     rentalCommissionIncome: 0,
+    resaleCommissionIncome: 0,
     
     // Income Metrics
     completedRentalIncome: 0,
     completedBuilderIncome: 0,
+    completedResaleIncome: 0,
     upcomingRentalIncome: 0,
     upcomingBuilderIncome: 0,
+    upcomingResaleIncome: 0,
     
     // Status Counts
     activeRentalDeals: 0,
     activeBuilderDeals: 0,
+    activeResaleDeals: 0,
     completedRentalDeals: 0,
     completedBuilderDeals: 0,
+    completedResaleDeals: 0,
     
     // Recent Activity
     recentRentalDeals: [],
     recentBuilderDeals: [],
+    recentResaleDeals: [],
     topClients: []
   });
   const [loading, setLoading] = useState(true);
@@ -105,6 +119,7 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
       const [
         rentalDealsResult,
         builderDealsResult,
+        resaleDealsResult,
         clientsResult,
         ownersResult,
         buildersResult,
@@ -112,6 +127,7 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
       ] = await Promise.all([
         supabase.from('rental_deals').select('id, rental_amount, brokerage_amount, status, created_at, client_name, property_type'),
         supabase.from('builder_deals').select('id, property_price, commission_amount, status, created_at, client_name, property_type'),
+        supabase.from('resale_deals').select('id, property_price, commission_amount, brokerage_amount, status, created_at, buyer_name, property_type'),
         supabase.from('clients').select('id, name').order('name'),
         supabase.from('owners').select('id'),
         supabase.from('builders').select('id'),
@@ -148,10 +164,25 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
         .filter(deal => deal.status !== 'completed')
         .reduce((sum, deal) => sum + (deal.commission_amount || 0), 0);
 
+      // Process resale deals
+      const resaleDeals = resaleDealsResult.data || [];
+      const totalResaleValue = resaleDeals.reduce((sum, deal) => sum + (parseFloat(deal.property_price) || 0), 0);
+      const resaleCommissionIncome = resaleDeals.reduce((sum, deal) => sum + (parseFloat(deal.commission_amount || deal.brokerage_amount || 0)), 0);
+      const activeResaleDeals = resaleDeals.filter(deal => deal.status === 'active').length;
+      const completedResaleDeals = resaleDeals.filter(deal => deal.status === 'completed').length;
+      
+      // Calculate resale income metrics
+      const completedResaleIncome = resaleDeals
+        .filter(deal => deal.status === 'completed')
+        .reduce((sum, deal) => sum + (parseFloat(deal.commission_amount || deal.brokerage_amount || 0)), 0);
+      const upcomingResaleIncome = resaleDeals
+        .filter(deal => deal.status !== 'completed')
+        .reduce((sum, deal) => sum + (parseFloat(deal.commission_amount || deal.brokerage_amount || 0)), 0);
+
       // Count properties by type
       // All rental deals are rental properties (residential + commercial)
       const rentalProperties = rentalDeals.length;
-      const resaleProperties = 0; // No resale properties in rental deals
+      const resaleProperties = resaleDeals.length;
       const builderProperties = builderDeals.length;
 
       // Get recent deals
@@ -160,6 +191,10 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
         .slice(0, 5);
       
       const recentBuilderDeals = builderDeals
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5);
+      
+      const recentResaleDeals = resaleDeals
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5);
 
@@ -187,24 +222,31 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
         // Financial Metrics
         totalRentalValue: totalRentalValue,
         totalBuilderValue: totalBuilderValue,
+        totalResaleValue: totalResaleValue,
         totalCommission: totalCommission,
         rentalCommissionIncome: rentalCommissionIncome,
+        resaleCommissionIncome: resaleCommissionIncome,
         
         // Income Metrics
         completedRentalIncome: completedRentalIncome,
         completedBuilderIncome: completedBuilderIncome,
+        completedResaleIncome: completedResaleIncome,
         upcomingRentalIncome: upcomingRentalIncome,
         upcomingBuilderIncome: upcomingBuilderIncome,
+        upcomingResaleIncome: upcomingResaleIncome,
         
         // Status Counts
         activeRentalDeals: activeRentalDeals,
         activeBuilderDeals: activeBuilderDeals,
+        activeResaleDeals: activeResaleDeals,
         completedRentalDeals: completedRentalDeals,
         completedBuilderDeals: completedBuilderDeals,
+        completedResaleDeals: completedResaleDeals,
         
         // Recent Activity
         recentRentalDeals: recentRentalDeals,
         recentBuilderDeals: recentBuilderDeals,
+        recentResaleDeals: recentResaleDeals,
         topClients: topClients
       });
     } catch (error) {
@@ -271,7 +313,7 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
             <div>
               <p className="text-sm font-medium text-purple-700">Resale Properties</p>
               <p className="text-3xl font-bold text-purple-900">{stats.totalResaleProperties}</p>
-              <p className="text-xs text-purple-600 mt-1">Available for resale</p>
+              <p className="text-xs text-purple-600 mt-1">{stats.activeResaleDeals} active, {stats.completedResaleDeals} completed</p>
             </div>
             <div className="p-3 bg-purple-200 rounded-full">
               <Building2 className="w-6 h-6 text-purple-700" />
@@ -294,7 +336,7 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
       </div>
 
       {/* Income Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6 bg-gradient-to-r from-green-50 to-green-100 border-green-200">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -320,17 +362,39 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
         <Card className="p-6 bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-medium text-purple-700">Builder Income</p>
-              <p className="text-3xl font-bold text-purple-900">₹{stats.completedBuilderIncome.toFixed(2)}L</p>
+              <p className="text-sm font-medium text-purple-700">Resale Income</p>
+              <p className="text-3xl font-bold text-purple-900">₹{stats.completedResaleIncome.toLocaleString()}</p>
             </div>
             <div className="p-3 bg-purple-200 rounded-full">
-              <TrendingUp className="w-6 h-6 text-purple-700" />
+              <Building2 className="w-6 h-6 text-purple-700" />
             </div>
           </div>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm text-purple-600">Completed:</span>
-              <span className="font-semibold text-purple-800">₹{stats.completedBuilderIncome.toFixed(2)}L</span>
+              <span className="font-semibold text-purple-800">₹{stats.completedResaleIncome.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-orange-600">Upcoming:</span>
+              <span className="font-semibold text-orange-800">₹{stats.upcomingResaleIncome.toLocaleString()}</span>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6 bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-medium text-blue-700">Builder Income</p>
+              <p className="text-3xl font-bold text-blue-900">₹{stats.completedBuilderIncome.toFixed(2)}L</p>
+            </div>
+            <div className="p-3 bg-blue-200 rounded-full">
+              <TrendingUp className="w-6 h-6 text-blue-700" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-blue-600">Completed:</span>
+              <span className="font-semibold text-blue-800">₹{stats.completedBuilderIncome.toFixed(2)}L</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-orange-600">Upcoming:</span>
@@ -341,7 +405,7 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
       </div>
 
       {/* Financial Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Financial Overview</h3>
@@ -360,6 +424,21 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
               </div>
               <div className="text-right">
                 <p className="font-bold text-blue-600">₹{stats.totalRentalValue.toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Building2 className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Total Resale Value</p>
+                  <p className="text-sm text-gray-600">{stats.totalResaleDeals} resale deals</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-purple-600">₹{stats.totalResaleValue.toLocaleString()}</p>
               </div>
             </div>
 
@@ -447,6 +526,40 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
             )}
           </div>
         </Card>
+
+        {/* Recent Resale Deals */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Recent Resale Deals</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onTabChange('resale-property')}
+            >
+              View All
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {stats.recentResaleDeals.length > 0 ? (
+              stats.recentResaleDeals.map((deal, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">Resale Deal</p>
+                    <p className="text-sm text-gray-600">{deal.buyer_name || 'N/A'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-md">₹{parseFloat(deal.commission_amount || deal.brokerage_amount || 0).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(deal.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-4">No recent resale deals</p>
+            )}
+          </div>
+        </Card>
       </div>
 
       {/* Business Entities & Deal Status */}
@@ -496,6 +609,14 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
               <span className="font-bold text-green-600">{stats.activeBuilderDeals}</span>
             </div>
             
+            <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                <span className="font-medium text-gray-900">Active Resale Deals</span>
+              </div>
+              <span className="font-bold text-purple-600">{stats.activeResaleDeals}</span>
+            </div>
+            
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center space-x-3">
                 <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
@@ -510,6 +631,14 @@ const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ onTabChange }) =>
                 <span className="font-medium text-gray-900">Completed Builder Deals</span>
               </div>
               <span className="font-bold text-gray-600">{stats.completedBuilderDeals}</span>
+            </div>
+            
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                <span className="font-medium text-gray-900">Completed Resale Deals</span>
+              </div>
+              <span className="font-bold text-gray-600">{stats.completedResaleDeals}</span>
             </div>
           </div>
         </Card>

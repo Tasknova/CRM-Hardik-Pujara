@@ -32,7 +32,21 @@ export interface ProjectManager {
   updated_at: string;
 }
 
-export type User = Member | Admin | ProjectManager;
+export interface Broker {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  company_name?: string;
+  license_number?: string;
+  password_hash?: string;
+  is_active?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type User = Member | Admin | ProjectManager | Broker;
 
 export interface Project {
   id: string;
@@ -60,7 +74,8 @@ export interface TaskAttachment {
 
 export interface Task {
   id: string;
-  user_id: string;
+  user_id?: string; // Optional now, since tasks can be assigned to brokers
+  broker_id?: string; // For broker tasks
   created_by: string;
   task_name: string;
   description: string;
@@ -70,6 +85,7 @@ export interface Task {
   created_at: string;
   updated_at: string;
   user?: Member;
+  broker?: { id: string; name: string; email?: string; phone?: string };
   project_id?: string;
   project?: Project;
   progress: number; // 0-100
@@ -110,11 +126,11 @@ export interface Leave {
 }
 
 export interface AuthContextType {
-  user: (Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | null;
-  login: (email: string, password: string, role: 'admin' | 'member' | 'project_manager') => Promise<void>;
+  user: (Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | (Broker & { role: 'broker' }) | null;
+  login: (email: string, password: string, role: 'admin' | 'member' | 'project_manager' | 'broker') => Promise<void>;
   logout: () => void;
   loading: boolean;
-  setUser: (user: (Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | null) => void;
+  setUser: (user: (Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | (Broker & { role: 'broker' }) | null) => void;
 }
 
 export interface TaskFilters {

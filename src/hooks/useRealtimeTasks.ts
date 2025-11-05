@@ -29,30 +29,36 @@ export const useRealtimeTasks = () => {
       const assignedUserIds = [...new Set(tasks.flatMap(task => task.assigned_user_ids || []))];
       const allUserIds = [...new Set([...primaryUserIds, ...assignedUserIds])];
       
+      // Get unique broker IDs from tasks
+      const brokerIds = [...new Set(tasks.map(task => task.broker_id).filter(id => id))];
       
-      
-      // Fetch members, admins, and project managers for all user IDs
-      const [membersData, adminsData, projectManagersData] = await Promise.all([
+      // Fetch members, admins, project managers, and brokers
+      const [membersData, adminsData, projectManagersData, brokersData] = await Promise.all([
         supabase
           .from('members')
           .select('id, name, email, avatar_url')
-          .in('id', allUserIds)
+          .in('id', allUserIds.length > 0 ? allUserIds : ['00000000-0000-0000-0000-000000000000'])
           .eq('is_active', true),
         supabase
           .from('admins')
           .select('id, name, email, avatar_url')
-          .in('id', allUserIds)
+          .in('id', allUserIds.length > 0 ? allUserIds : ['00000000-0000-0000-0000-000000000000'])
           .eq('is_active', true),
         supabase
           .from('project_managers')
           .select('id, name, email, avatar_url')
-          .in('id', allUserIds)
-          .eq('is_active', true)
+          .in('id', allUserIds.length > 0 ? allUserIds : ['00000000-0000-0000-0000-000000000000'])
+          .eq('is_active', true),
+        supabase
+          .from('brokers')
+          .select('id, name, email, phone')
+          .in('id', brokerIds.length > 0 ? brokerIds : ['00000000-0000-0000-0000-000000000000'])
+          .or('is_active.is.null,is_active.eq.true')
       ]);
 
       // Combine members, admins, and project managers into a single map
       const userMap = new Map();
-      
+      const brokerMap = new Map();
       
       if (membersData.data) {
         membersData.data.forEach(member => {
@@ -72,13 +78,32 @@ export const useRealtimeTasks = () => {
         });
       }
       
+      if (brokersData.data) {
+        brokersData.data.forEach(broker => {
+          brokerMap.set(broker.id, broker);
+        });
+      }
 
-      // Attach user data to tasks and create assignments from assigned_user_ids JSONB
+      // Attach user data to tasks and create assignments from assigned_user_ids JSONB or broker_id
       return tasks.map(task => {
         let assignments = [];
         
-        // Create assignments from assigned_user_ids JSONB column
-        if (task.assigned_user_ids && Array.isArray(task.assigned_user_ids)) {
+        // Handle broker tasks
+        if (task.broker_id) {
+          const broker = brokerMap.get(task.broker_id);
+          if (broker) {
+            assignments = [{
+              id: `${task.id}-broker-${task.broker_id}`,
+              task_id: task.id,
+              user_id: null,
+              assigned_at: task.created_at,
+              assigned_by: task.created_by,
+              member_name: broker.name,
+              member_email: broker.email || 'N/A'
+            }];
+          }
+        } else if (task.assigned_user_ids && Array.isArray(task.assigned_user_ids)) {
+          // Create assignments from assigned_user_ids JSONB column
           const validUserIds = task.assigned_user_ids.filter((userId: string) => userId);
           
           assignments = validUserIds.map((userId: string) => {
@@ -98,6 +123,7 @@ export const useRealtimeTasks = () => {
         return {
           ...task,
           user: task.user_id ? userMap.get(task.user_id) || null : null,
+          broker: task.broker_id ? brokerMap.get(task.broker_id) || null : null,
           assignments: assignments
         };
       });
@@ -227,6 +253,12 @@ export const useRealtimeTasks = () => {
         // Delete from builder stage assignments
         await supabase
           .from('builder_stage_assignments')
+          .delete()
+          .eq('task_id', id);
+
+        // Delete from resale stage assignments
+        await supabase
+          .from('resale_stage_assignments')
           .delete()
           .eq('task_id', id);
       } catch (assignmentError) {

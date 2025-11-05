@@ -1,13 +1,16 @@
 import React from 'react';
-import { Shield, Users, Folder, Key } from 'lucide-react';
+import { Shield, Users, Folder, Key, Building2 } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import { useNavigate } from 'react-router-dom';
 
 interface LandingPageProps {
   onSelectRole: (role: 'admin' | 'member' | 'project_manager') => void;
 }
 
 const LandingPage: React.FC<LandingPageProps> = ({ onSelectRole }) => {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50 flex flex-col items-center justify-center px-4">
       {/* Header */}
@@ -80,8 +83,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectRole }) => {
           </Card>
         </div>
 
-        {/* Project Level Access Link */}
-        <div className="text-center">
+        {/* Project Level Access & Broker Login Links */}
+        <div className="text-center space-y-3">
           <a 
             href="/project-access/login" 
             className="inline-flex items-center text-sm text-gray-600 hover:text-blue-600 transition-colors duration-200"
@@ -89,6 +92,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ onSelectRole }) => {
             <Key className="w-4 h-4 mr-2" />
             Project Level Access
           </a>
+          <div className="flex items-center justify-center space-x-2">
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <span className="text-xs text-gray-500">or</span>
+            <div className="flex-1 h-px bg-gray-300"></div>
+          </div>
+          <Button
+            onClick={() => navigate('/broker/login')}
+            variant="outline"
+            className="inline-flex items-center text-sm border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors duration-200"
+          >
+            <Building2 className="w-4 h-4 mr-2" />
+            Broker Login
+          </Button>
         </div>
       </div>
     </div>

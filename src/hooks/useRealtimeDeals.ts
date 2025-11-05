@@ -152,3 +152,75 @@ export function useRealtimeBuilderDeals(dealType: 'residential' | 'commercial') 
 
   return { deals, loading, error, refetch: fetchDeals };
 }
+
+interface ResaleDeal {
+  id: string;
+  project_name: string;
+  deal_type: string;
+  owner_name: string;
+  buyer_name: string;
+  property_address: string;
+  property_price: number;
+  status: string;
+  created_at: string;
+  current_stage: number;
+}
+
+export function useRealtimeResaleDeals() {
+  const [deals, setDeals] = useState<ResaleDeal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDeals = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('resale_deals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDeals(data || []);
+    } catch (err) {
+      setError('Failed to fetch resale deals');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeals();
+
+    const dealsSubscription = supabase
+      .channel('resale_deals_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'resale_deals'
+        },
+        (payload) => {
+          console.log('Resale deals real-time update:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            const newDeal = payload.new as ResaleDeal;
+            setDeals(prev => [newDeal, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedDeal = payload.new as ResaleDeal;
+            setDeals(prev => prev.map(d => d.id === updatedDeal.id ? updatedDeal : d));
+          } else if (payload.eventType === 'DELETE') {
+            const deletedDeal = payload.old as ResaleDeal;
+            setDeals(prev => prev.filter(d => d.id !== deletedDeal.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      dealsSubscription.unsubscribe();
+    };
+  }, []);
+
+  return { deals, loading, error, refetch: fetchDeals };
+}

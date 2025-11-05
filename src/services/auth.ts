@@ -1,13 +1,13 @@
 import { supabase } from '../lib/supabase';
-import { Member, Admin, ProjectManager } from '../types';
+import { Member, Admin, ProjectManager, Broker } from '../types';
 
 export interface LoginResponse {
-  user: (Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' });
+  user: (Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | (Broker & { role: 'broker' });
   token: string;
 }
 
 export const authService = {
-  async loginUser(email: string, password: string, role: 'admin' | 'member' | 'project_manager'): Promise<LoginResponse> {
+  async loginUser(email: string, password: string, role: 'admin' | 'member' | 'project_manager' | 'broker'): Promise<LoginResponse> {
     try {
       let user, error;
       if (role === 'admin') {
@@ -24,6 +24,14 @@ export const authService = {
           .eq('email', email)
           .eq('is_active', true)
           .single());
+      } else if (role === 'broker') {
+        // For brokers, login using broker_id instead of email
+        ({ data: user, error } = await supabase
+          .from('brokers')
+          .select('*')
+          .eq('id', email) // Use email field for broker_id
+          .or('is_active.is.null,is_active.eq.true')
+          .single());
       } else {
         ({ data: user, error } = await supabase
           .from('members')
@@ -34,13 +42,13 @@ export const authService = {
       }
 
       if (error || !user) {
-        throw new Error('Invalid email or password');
+        throw new Error('Invalid credentials');
       }
 
       // Verify password using proper hashing
       const hashedPassword = btoa(password);
-      if (user.password_hash !== hashedPassword) {
-        throw new Error('Invalid email or password');
+      if (!user.password_hash || user.password_hash !== hashedPassword) {
+        throw new Error('Invalid credentials');
       }
 
       // Create a simple token (in production, use JWT)

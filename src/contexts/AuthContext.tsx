@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Member, Admin, ProjectManager, AuthContextType } from '../types';
+import { Member, Admin, ProjectManager, Broker, AuthContextType } from '../types';
 import { authService } from '../services/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,10 +17,10 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<(Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | null>(null);
+  const [user, setUser] = useState<(Member & { role: 'member' }) | (Admin & { role: 'admin' }) | (ProjectManager & { role: 'project_manager' }) | (Broker & { role: 'broker' }) | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const login = async (email: string, password: string, role: 'admin' | 'member' | 'project_manager') => {
+  const login = async (email: string, password: string, role: 'admin' | 'member' | 'project_manager' | 'broker') => {
     setLoading(true);
     try {
       const response = await authService.loginUser(email, password, role);

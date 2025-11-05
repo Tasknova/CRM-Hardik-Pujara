@@ -28,6 +28,8 @@ import { supabase } from './lib/supabase';
 import NotificationsPage from './components/dashboard/NotificationsPage';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import BrokerLogin from './components/auth/BrokerLogin';
+import BrokerDashboard from './components/dashboard/BrokerDashboard';
 
 const getRemovedFlag = (user) => user ? sessionStorage.getItem(`notifications_removed_${user.id}`) === '1' : false;
 
@@ -86,6 +88,11 @@ const AppContent: React.FC = () => {
       window.removeEventListener('notifications-hide-badge', hideBadgeHandler);
     };
   }, [user]);
+
+  // Check if user is a broker (brokers have separate dashboard)
+  if (user && (user as any).role === 'broker') {
+    return <BrokerDashboard />;
+  }
 
   if (!user) {
     if (selectedRole) {
@@ -184,6 +191,10 @@ const App: React.FC = () => {
           <Route path="/project-access/timeline/:projectId" element={<ProjectAccessTasksWrapper />} />
           <Route path="/project-access/tasks/:projectId" element={<ProjectAccessTasksWrapper />} />
           <Route path="/project-access/documents/:projectId" element={<ProjectAccessDocumentsWrapper />} />
+          
+          {/* Broker Routes - Outside admin layout */}
+          <Route path="/broker/login" element={<BrokerLogin />} />
+          <Route path="/broker/dashboard" element={<AppContent />} />
           
           {/* Main App Routes - Inside admin layout */}
           <Route path="*" element={<AppContent />} />

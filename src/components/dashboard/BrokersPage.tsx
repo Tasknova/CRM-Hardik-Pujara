@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Eye, Mail, Phone, MapPin, User, Trash2, Building, FileText } from 'lucide-react';
+import { Plus, Search, Edit, Eye, EyeOff, Mail, Phone, MapPin, User, Trash2, Building, FileText, Key, Copy, Check } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
@@ -28,6 +28,10 @@ const BrokersPage: React.FC = () => {
   const [viewingBroker, setViewingBroker] = useState<Broker | null>(null);
   const [brokerToDelete, setBrokerToDelete] = useState<Broker | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const [brokerCredentials, setBrokerCredentials] = useState<{ brokerId: string; password: string; loginUrl: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -91,6 +95,73 @@ const BrokersPage: React.FC = () => {
 
   const handleDelete = (broker: Broker) => {
     setBrokerToDelete(broker);
+  };
+
+  const generatePassword = () => {
+    // Generate a random 8-character password
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 8; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
+
+  const handleGiveAccess = async (broker: Broker) => {
+    try {
+      // Check if broker already has credentials
+      if (broker.password_hash) {
+        // Credentials already exist - show existing credentials info
+        const loginUrl = 'https://propazone.tasknova.io/broker/login';
+        setBrokerCredentials({
+          brokerId: broker.id,
+          password: '********', // Show masked password
+          loginUrl: loginUrl
+        });
+        setShowAccessModal(true);
+        toast.info('Broker already has access. Password cannot be viewed for security reasons.');
+        return;
+      }
+
+      // Generate a new password only if one doesn't exist
+      const password = generatePassword();
+
+      // Hash the password
+      const hashedPassword = btoa(password);
+
+      // Update broker with password
+      const { error } = await supabase
+        .from('brokers')
+        .update({
+          password_hash: hashedPassword,
+          is_active: true
+        })
+        .eq('id', broker.id);
+
+      if (error) throw error;
+
+      // Set credentials to show in modal
+      const loginUrl = 'https://propazone.tasknova.io/broker/login';
+      setBrokerCredentials({
+        brokerId: broker.id,
+        password: password,
+        loginUrl: loginUrl
+      });
+      setShowPassword(false); // Reset to hide password by default
+      setShowAccessModal(true);
+
+      toast.success('Access granted successfully!');
+    } catch (error) {
+      console.error('Error giving access:', error);
+      toast.error('Failed to grant access');
+    }
+  };
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    toast.success('Copied to clipboard!');
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   const handleDeleteConfirm = async () => {
@@ -273,6 +344,13 @@ const BrokersPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex space-x-1">
+                  <button
+                    onClick={() => handleGiveAccess(broker)}
+                    className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
+                    title="Give access"
+                  >
+                    <Key className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => handleView(broker)}
                     className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -526,6 +604,153 @@ const BrokersPage: React.FC = () => {
         message={`Are you sure you want to delete "${brokerToDelete?.name}"? This action cannot be undone.`}
         isLoading={isDeleting}
       />
+
+      {/* Access Credentials Modal */}
+      <Modal
+        isOpen={showAccessModal}
+        onClose={() => {
+          setShowAccessModal(false);
+          setBrokerCredentials(null);
+          setCopiedField(null);
+          setShowPassword(false);
+        }}
+        title="Broker Access Credentials"
+      >
+        {brokerCredentials && (
+          <div className="space-y-4">
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <p className="text-sm text-gray-600 mb-4">
+                Share these credentials with the broker. They can use these to login to their dashboard.
+              </p>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Broker ID
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={brokerCredentials.brokerId}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                    />
+                    <button
+                      onClick={() => copyToClipboard(brokerCredentials.brokerId, 'brokerId')}
+                      className="p-2 text-gray-600 hover:text-purple-600 transition-colors"
+                      title="Copy Broker ID"
+                    >
+                      {copiedField === 'brokerId' ? (
+                        <Check className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <Copy className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                      <input
+                        type={brokerCredentials.password === '********' ? 'password' : (showPassword ? 'text' : 'password')}
+                        value={brokerCredentials.password}
+                        readOnly
+                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                      />
+                      {brokerCredentials.password !== '********' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-purple-600 transition-colors z-10"
+                          title={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      )}
+                    </div>
+                    {brokerCredentials.password !== '********' && (
+                      <button
+                        onClick={() => copyToClipboard(brokerCredentials.password, 'password')}
+                        className="p-2 text-gray-600 hover:text-purple-600 transition-colors"
+                        title="Copy Password"
+                      >
+                        {copiedField === 'password' ? (
+                          <Check className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <Copy className="w-5 h-5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  {brokerCredentials.password === '********' && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Password is hidden for security. Broker can change it from their profile.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Login URL
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={brokerCredentials.loginUrl}
+                      readOnly
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                    />
+                    <button
+                      onClick={() => copyToClipboard(brokerCredentials.loginUrl, 'loginUrl')}
+                      className="p-2 text-gray-600 hover:text-purple-600 transition-colors"
+                      title="Copy Login URL"
+                    >
+                      {copiedField === 'loginUrl' ? (
+                        <Check className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <Copy className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  {brokerCredentials.password === '********' ? (
+                    <>
+                      <strong>Note:</strong> This broker already has credentials set. The password cannot be viewed for security reasons. 
+                      The broker can change their password from their profile page after logging in.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Note:</strong> Please save this password securely. It will not be shown again. 
+                      The broker can change their password from their profile page after logging in.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setShowAccessModal(false);
+                  setBrokerCredentials(null);
+                  setCopiedField(null);
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
