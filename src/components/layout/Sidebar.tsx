@@ -144,7 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
       className={`
         fixed top-0 left-0 h-screen z-30
         ${isOpen ? 'w-64' : 'w-16'}
-        bg-gradient-to-b from-blue-50 to-blue-100 border-r border-blue-200
+        bg-gradient-to-b from-blue-50 to-blue-100 dark:from-gray-800 dark:to-gray-900 border-r border-blue-200 dark:border-gray-700
         shadow-xl transition-all duration-500 ease-in-out
         group/sidebar
       `}
@@ -152,11 +152,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
       onMouseLeave={() => setIsOpen(false)}
     >
              {/* Logo Section */}
-       <div className="flex items-center justify-center h-16 px-4 border-b border-blue-200">
+       <div className="flex items-center justify-center h-16 px-4 border-b border-blue-200 dark:border-gray-700">
          {isOpen ? (
            <div className="flex items-center space-x-2">
              <img src="/logoFinal.png" alt="Propazone Logo" className="h-8 w-auto" />
-             <h1 className="text-xl font-bold text-gray-800">Propazone</h1>
+             <h1 className="text-xl font-bold text-gray-800 dark:text-white">Propazone</h1>
            </div>
          ) : (
            <img src="/logoFinal.png" alt="Propazone Logo" className="h-8 w-auto" />
@@ -165,14 +165,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
 
       {/* Dashboard Mode Switcher for Admin */}
       {isAdmin && dashboardMode && onDashboardModeChange && (
-        <div className="px-2 py-3 border-b border-blue-200">
-          <div className={`flex bg-gray-100 rounded-lg p-1 ${isOpen ? 'flex-row' : 'flex-col space-y-1'}`}>
+        <div className="px-2 py-3 border-b border-blue-200 dark:border-gray-700">
+          <div className={`flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 ${isOpen ? 'flex-row' : 'flex-col space-y-1'}`}>
             <button
               onClick={() => onDashboardModeChange('team')}
               className={`${isOpen ? 'flex-1' : 'w-full'} px-2 py-1 rounded-md text-xs font-medium transition-colors ${
                 dashboardMode === 'team'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <Users className="w-3 h-3 inline mr-1" />
@@ -182,8 +182,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
               onClick={() => onDashboardModeChange('business')}
               className={`${isOpen ? 'flex-1' : 'w-full'} px-2 py-1 rounded-md text-xs font-medium transition-colors ${
                 dashboardMode === 'business'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <Building2 className="w-3 h-3 inline mr-1" />
@@ -204,8 +204,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, isOpen, setIs
                   className={`
                     flex items-center w-full py-3 rounded-lg transition-all duration-300
                     ${activeTab === tab.id 
-                      ? 'bg-blue-200 text-blue-800 shadow-lg scale-105' 
-                      : 'text-blue-600 hover:bg-blue-100 hover:text-blue-900'
+                      ? 'bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 shadow-lg scale-105' 
+                      : 'text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-gray-700 hover:text-blue-900 dark:hover:text-white'
                     }
                     ${isOpen ? 'px-4' : 'justify-center'}
                     sidebar-btn

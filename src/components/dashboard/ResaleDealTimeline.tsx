@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Calendar, User, CheckCircle, Clock, MessageSquare, Edit2, Save, X, UserPlus, Star, Paperclip } from 'lucide-react';
+import { ArrowLeft, Calendar, User, CheckCircle, Clock, MessageSquare, Edit2, Save, X, UserPlus, Star, Paperclip, Settings, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import Modal from '../ui/Modal';
 import FileUpload from '../ui/FileUpload';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
@@ -110,6 +111,11 @@ const ResaleDealTimeline: React.FC<ResaleDealTimelineProps> = ({ dealId, onBack 
     comments: '',
     attachments: [] as any[]
   });
+  const [showStageManagement, setShowStageManagement] = useState(false);
+  const [editingStageName, setEditingStageName] = useState<string | null>(null);
+  const [newStageName, setNewStageName] = useState('');
+  const [stageToDelete, setStageToDelete] = useState<string | null>(null);
+  const isAdmin = user && (user as any).role === 'admin';
 
   useEffect(() => {
     fetchDealData();
@@ -542,6 +548,133 @@ const ResaleDealTimeline: React.FC<ResaleDealTimelineProps> = ({ dealId, onBack 
     });
   };
 
+  // Stage Management Functions
+  const handleAddStage = async () => {
+    if (!newStageName.trim()) {
+      toast.error('Please enter a stage name');
+      return;
+    }
+
+    try {
+      const maxOrder = stages.length > 0 ? Math.max(...stages.map(s => s.stage_order)) : 0;
+      const { error } = await supabase
+        .from('resale_deal_stages')
+        .insert([{
+          deal_id: dealId,
+          stage_name: newStageName.trim(),
+          stage_order: maxOrder + 1,
+          status: 'pending'
+        }]);
+
+      if (error) throw error;
+
+      toast.success('Stage added successfully');
+      setNewStageName('');
+      fetchDealData();
+    } catch (error) {
+      console.error('Error adding stage:', error);
+      toast.error('Failed to add stage');
+    }
+  };
+
+  const handleDeleteStage = async (stageId: string) => {
+    try {
+      const { data: assignments } = await supabase
+        .from('resale_stage_assignments')
+        .select('id')
+        .eq('stage_id', stageId)
+        .limit(1);
+
+      if (assignments && assignments.length > 0) {
+        toast.error('Cannot delete stage with assigned tasks. Please remove assignments first.');
+        return;
+      }
+
+      const stageToDelete = stages.find(s => s.id === stageId);
+      if (!stageToDelete) return;
+
+      const { error } = await supabase
+        .from('resale_deal_stages')
+        .delete()
+        .eq('id', stageId);
+
+      if (error) throw error;
+
+      const remainingStages = stages.filter(s => s.id !== stageId);
+      const reorderPromises = remainingStages.map((stage, index) => {
+        const newOrder = index + 1;
+        if (stage.stage_order !== newOrder) {
+          return supabase
+            .from('resale_deal_stages')
+            .update({ stage_order: newOrder })
+            .eq('id', stage.id);
+        }
+        return Promise.resolve({ error: null });
+      });
+
+      await Promise.all(reorderPromises);
+
+      toast.success('Stage deleted successfully');
+      setStageToDelete(null);
+      fetchDealData();
+    } catch (error) {
+      console.error('Error deleting stage:', error);
+      toast.error('Failed to delete stage');
+    }
+  };
+
+  const handleUpdateStageName = async (stageId: string, newName: string) => {
+    if (!newName.trim()) {
+      toast.error('Stage name cannot be empty');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('resale_deal_stages')
+        .update({ stage_name: newName.trim() })
+        .eq('id', stageId);
+
+      if (error) throw error;
+
+      toast.success('Stage name updated');
+      setEditingStageName(null);
+      fetchDealData();
+    } catch (error) {
+      console.error('Error updating stage name:', error);
+      toast.error('Failed to update stage name');
+    }
+  };
+
+  const handleMoveStage = async (stageId: string, direction: 'up' | 'down') => {
+    const stageIndex = stages.findIndex(s => s.id === stageId);
+    if (stageIndex === -1) return;
+
+    const newIndex = direction === 'up' ? stageIndex - 1 : stageIndex + 1;
+    if (newIndex < 0 || newIndex >= stages.length) return;
+
+    try {
+      const currentStage = stages[stageIndex];
+      const targetStage = stages[newIndex];
+
+      await supabase
+        .from('resale_deal_stages')
+        .update({ stage_order: targetStage.stage_order })
+        .eq('id', currentStage.id);
+
+      await supabase
+        .from('resale_deal_stages')
+        .update({ stage_order: currentStage.stage_order })
+        .eq('id', targetStage.id);
+
+      toast.success('Stage order updated');
+      fetchDealData();
+    } catch (error) {
+      console.error('Error moving stage:', error);
+      toast.error('Failed to move stage');
+    }
+  };
+
   const handleSaveStage = async (stageId: string) => {
     try {
       // Update the stage
@@ -849,6 +982,20 @@ const ResaleDealTimeline: React.FC<ResaleDealTimelineProps> = ({ dealId, onBack 
 
         {/* Stages Timeline */}
         <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-gray-900">Project Timeline</h2>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowStageManagement(true)}
+                className="flex items-center space-x-2"
+              >
+                <Settings className="w-4 h-4" />
+                <span>Manage Stages</span>
+              </Button>
+            )}
+          </div>
           {stages.map((stage, index) => (
             <Card key={stage.id} className="p-6">
               <div className="flex items-start space-x-4">
@@ -1155,6 +1302,160 @@ const ResaleDealTimeline: React.FC<ResaleDealTimelineProps> = ({ dealId, onBack 
           ))}
         </div>
       </div>
+
+      {/* Stage Management Modal */}
+      {isAdmin && (
+        <Modal
+          isOpen={showStageManagement}
+          onClose={() => {
+            setShowStageManagement(false);
+            setEditingStageName(null);
+            setNewStageName('');
+            setStageToDelete(null);
+          }}
+          title="Manage Stages"
+        >
+          <div className="space-y-4">
+            <div className="border-b border-gray-200 pb-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Add New Stage</h3>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newStageName}
+                  onChange={(e) => setNewStageName(e.target.value)}
+                  placeholder="Enter stage name"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAddStage();
+                    }
+                  }}
+                />
+                <Button onClick={handleAddStage} className="flex items-center space-x-2">
+                  <Plus className="w-4 h-4" />
+                  <span>Add</span>
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Existing Stages</h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {stages
+                  .sort((a, b) => a.stage_order - b.stage_order)
+                  .map((stage, index) => (
+                    <div
+                      key={stage.id}
+                      className="flex items-center space-x-2 p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
+                    >
+                      <div className="flex items-center space-x-2 flex-1">
+                        <span className="text-sm font-medium text-gray-500 w-8">
+                          {stage.stage_order}.
+                        </span>
+                        {editingStageName === stage.id ? (
+                          <input
+                            type="text"
+                            defaultValue={stage.stage_name}
+                            onBlur={(e) => {
+                              if (e.target.value !== stage.stage_name) {
+                                handleUpdateStageName(stage.id, e.target.value);
+                              } else {
+                                setEditingStageName(null);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleUpdateStageName(stage.id, e.currentTarget.value);
+                              } else if (e.key === 'Escape') {
+                                setEditingStageName(null);
+                              }
+                            }}
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            autoFocus
+                          />
+                        ) : (
+                          <span
+                            className="flex-1 text-gray-900 cursor-pointer"
+                            onClick={() => setEditingStageName(stage.id)}
+                          >
+                            {stage.stage_name}
+                          </span>
+                        )}
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          stage.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          stage.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {stage.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleMoveStage(stage.id, 'up')}
+                          disabled={index === 0}
+                          className="p-1 text-gray-400 hover:text-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveStage(stage.id, 'down')}
+                          disabled={index === stages.length - 1}
+                          className="p-1 text-gray-400 hover:text-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingStageName(editingStageName === stage.id ? null : stage.id)}
+                          className="p-1 text-gray-400 hover:text-purple-600"
+                          title="Edit name"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setStageToDelete(stage.id)}
+                          className="p-1 text-gray-400 hover:text-red-600"
+                          title="Delete stage"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {stageToDelete && (
+        <Modal
+          isOpen={!!stageToDelete}
+          onClose={() => setStageToDelete(null)}
+          title="Delete Stage"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-700">
+              Are you sure you want to delete "{stages.find(s => s.id === stageToDelete)?.stage_name}"?
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <Button variant="outline" onClick={() => setStageToDelete(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => handleDeleteStage(stageToDelete)}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

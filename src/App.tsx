@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import LandingPage from './components/auth/LandingPage';
 import LoginForm from './components/auth/LoginForm';
 import Header from './components/layout/Header';
@@ -117,7 +118,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
              <Header 
          unreadNotifications={filteredNotificationsCount === 0 ? 0 : unreadNotifications}
          onNotificationsClick={handleNotificationsClick}
@@ -182,26 +183,28 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* External Project Access Routes - Outside admin layout */}
-          <Route path="/project-access/login" element={<ProjectAccessLogin />} />
-          <Route path="/project-access/dashboard/:projectId" element={<ProjectAccessDashboard />} />
-          <Route path="/project-access/timeline/:projectId" element={<ProjectAccessTasksWrapper />} />
-          <Route path="/project-access/tasks/:projectId" element={<ProjectAccessTasksWrapper />} />
-          <Route path="/project-access/documents/:projectId" element={<ProjectAccessDocumentsWrapper />} />
-          
-          {/* Broker Routes - Outside admin layout */}
-          <Route path="/broker/login" element={<BrokerLogin />} />
-          <Route path="/broker/dashboard" element={<AppContent />} />
-          
-          {/* Main App Routes - Inside admin layout */}
-          <Route path="*" element={<AppContent />} />
-        </Routes>
-      </BrowserRouter>
-      <ToastContainer position="top-right" autoClose={4500} />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* External Project Access Routes - Outside admin layout */}
+            <Route path="/project-access/login" element={<ProjectAccessLogin />} />
+            <Route path="/project-access/dashboard/:projectId" element={<ProjectAccessDashboard />} />
+            <Route path="/project-access/timeline/:projectId" element={<ProjectAccessTasksWrapper />} />
+            <Route path="/project-access/tasks/:projectId" element={<ProjectAccessTasksWrapper />} />
+            <Route path="/project-access/documents/:projectId" element={<ProjectAccessDocumentsWrapper />} />
+            
+            {/* Broker Routes - Outside admin layout */}
+            <Route path="/broker/login" element={<BrokerLogin />} />
+            <Route path="/broker/dashboard" element={<AppContent />} />
+            
+            {/* Main App Routes - Inside admin layout */}
+            <Route path="*" element={<AppContent />} />
+          </Routes>
+        </BrowserRouter>
+        <ToastContainer position="top-right" autoClose={4500} />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
