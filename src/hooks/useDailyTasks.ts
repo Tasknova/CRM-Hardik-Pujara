@@ -529,6 +529,12 @@ export const useDailyTasks = (filters: DailyTaskFilters = {}) => {
         position: "top-right",
         autoClose: 4000,
       });
+
+      // Update local state immediately for better UX
+      setTasks(prevTasks => prevTasks.filter(t => t.id !== id));
+      
+      // Refresh the tasks list after successful deletion to ensure consistency
+      await fetchTasks();
     } catch (err) {
       console.error('Error in deleteTask:', err);
       setError('Failed to delete daily task');

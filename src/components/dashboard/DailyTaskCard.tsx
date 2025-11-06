@@ -181,7 +181,7 @@ export const DailyTaskCard: React.FC<DailyTaskCardProps> = ({
                 variant="ghost"
                 size="sm"
                 icon={Trash2}
-                onClick={() => showDeleteConfirmation(task, 'daily_task')}
+                onClick={() => showDeleteConfirmation(task, 'daily', () => onDelete(task.id))}
                 className="text-red-500 hover:text-red-700 hover:bg-red-50 focus:ring-2 focus:ring-red-200 rounded-full"
                 title="Delete task"
               />

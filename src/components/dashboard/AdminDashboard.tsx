@@ -149,9 +149,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab, onTabChange,
 // --- Holiday Add Handler ---
 const handleAddHoliday = async (holidayData: { holiday_name: string; date: string; description?: string }) => {
   try {
+    const year = parseInt(holidayData.date.slice(0, 4), 10);
     const { data, error } = await supabase
       .from('company_holidays')
-      .insert([{ ...holidayData, is_recurring: false }])
+      .insert([{ ...holidayData, year }])
       .select();
     if (error) throw error;
     if (data && data.length > 0) {

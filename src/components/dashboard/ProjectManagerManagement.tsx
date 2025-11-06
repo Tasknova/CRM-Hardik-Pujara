@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, Plus, Trash2, Edit2, Folder, Link, Unlink, Users, Eye } from 'lucide-react';
+import { User, Mail, Phone, Plus, Trash2, Edit2, Folder, Link, Unlink, Users, Eye, EyeOff } from 'lucide-react';
 import { ProjectManager, Project } from '../../types';
 import { authService } from '../../services/auth';
 import { supabase } from '../../lib/supabase';
@@ -37,6 +37,7 @@ const ProjectManagerForm: React.FC<{
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -154,18 +155,28 @@ const ProjectManagerForm: React.FC<{
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {isEdit ? 'New Password (leave blank to keep current)' : 'Password *'}
           </label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required={!isEdit}
-            placeholder={isEdit ? 'Leave blank to keep current password' : 'Enter password'}
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+              required={!isEdit}
+              placeholder={isEdit ? 'Leave blank to keep current password' : 'Enter password'}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              title={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
         <div>
@@ -274,7 +285,36 @@ const ProjectAssignmentModal: React.FC<{
         console.error('Error fetching assignments:', assignmentsError);
       }
 
-      setProjects(projectsData || []);
+      // Fetch all active assignments to see which projects are already assigned to other PMs
+      const { data: allActiveAssignments, error: allAssignmentsError } = await supabase
+        .from('project_manager_assignments')
+        .select('project_id, project_manager_id')
+        .eq('is_active', true);
+
+      if (allAssignmentsError) {
+        console.error('Error fetching all assignments:', allAssignmentsError);
+      }
+
+      // Get list of project IDs that are assigned to other PMs (not the current PM)
+      const assignedToOtherPMs = new Set(
+        (allActiveAssignments || [])
+          .filter(a => a.project_manager_id !== projectManager.id)
+          .map(a => a.project_id)
+      );
+
+      // Filter projects: only show projects that are either:
+      // 1. Not assigned to any PM, OR
+      // 2. Already assigned to the current PM (so they can be unassigned)
+      const availableProjects = (projectsData || []).filter(project => {
+        // If project is assigned to another PM, exclude it
+        if (assignedToOtherPMs.has(project.id)) {
+          return false;
+        }
+        // Otherwise, include it (either unassigned or assigned to current PM)
+        return true;
+      });
+
+      setProjects(availableProjects);
       setAssignments(assignmentsData || []);
       setSelectedProjects((assignmentsData || []).map(a => a.project_id));
     } catch (error) {
@@ -312,11 +352,15 @@ const ProjectAssignmentModal: React.FC<{
 
       // Unassign projects
       if (projectsToUnassign.length > 0) {
-        await supabase
+        const { error: unassignError } = await supabase
           .from('project_manager_assignments')
-          .update({ is_active: false })
+          .update({ is_active: false, updated_at: new Date().toISOString() })
           .eq('project_manager_id', projectManager.id)
           .in('project_id', projectsToUnassign);
+        
+        if (unassignError) {
+          throw new Error(`Error unassigning projects: ${unassignError.message}`);
+        }
       }
 
       // Assign new projects
@@ -338,18 +382,50 @@ const ProjectAssignmentModal: React.FC<{
           throw new Error('User not found in admins table');
         }
         
-        const newAssignments = projectsToAssign.map(projectId => ({
-          project_manager_id: projectManager.id,
-          project_id: projectId,
-          assigned_by: assignedBy
-        }));
-
-        const assignResult = await supabase
-          .from('project_manager_assignments')
-          .upsert(newAssignments, { onConflict: 'project_manager_id,project_id' });
-        
-        if (assignResult.error) {
-          throw new Error(assignResult.error.message);
+        // For each project to assign, check if assignment exists and update or insert
+        for (const projectId of projectsToAssign) {
+          // Check if assignment already exists (even if inactive)
+          const { data: existingAssignment, error: checkError } = await supabase
+            .from('project_manager_assignments')
+            .select('id, is_active')
+            .eq('project_manager_id', projectManager.id)
+            .eq('project_id', projectId)
+            .maybeSingle();
+          
+          if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+            throw new Error(`Error checking existing assignment: ${checkError.message}`);
+          }
+          
+          if (existingAssignment) {
+            // Update existing assignment to active
+            const { error: updateError } = await supabase
+              .from('project_manager_assignments')
+              .update({
+                is_active: true,
+                assigned_by: assignedBy,
+                assigned_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingAssignment.id);
+            
+            if (updateError) {
+              throw new Error(`Error updating assignment: ${updateError.message}`);
+            }
+          } else {
+            // Insert new assignment
+            const { error: insertError } = await supabase
+              .from('project_manager_assignments')
+              .insert({
+                project_manager_id: projectManager.id,
+                project_id: projectId,
+                assigned_by: assignedBy,
+                is_active: true
+              });
+            
+            if (insertError) {
+              throw new Error(`Error creating assignment: ${insertError.message}`);
+            }
+          }
         }
       }
 
@@ -690,17 +766,15 @@ const ProjectManagerManagement: React.FC = () => {
                     <Folder className="w-4 h-4 text-gray-500" />
                     <span className="text-sm font-medium text-gray-700">Assigned Projects ({assignedProjects.length})</span>
                   </div>
-                  {assignedProjects.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      icon={Link}
-                      onClick={() => handleAssignProjects(pm)}
-                      className="text-xs hover:bg-blue-50"
-                    >
-                      Manage
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={Link}
+                    onClick={() => handleAssignProjects(pm)}
+                    className="text-xs hover:bg-blue-50"
+                  >
+                    Manage
+                  </Button>
                 </div>
                 
                 {assignedProjects.length > 0 ? (

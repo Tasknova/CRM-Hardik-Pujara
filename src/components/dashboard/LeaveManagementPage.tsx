@@ -149,15 +149,27 @@ const LeaveManagementPage: React.FC = () => {
   };
 
   // Filter members and project managers based on search term
-  const filteredMembers = members.filter(member => 
-    member.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = React.useMemo(() => {
+    if (!searchTerm.trim()) {
+      return members;
+    }
+    const searchLower = searchTerm.toLowerCase().trim();
+    return members.filter(member => 
+      member.name?.toLowerCase().includes(searchLower) ||
+      member.email?.toLowerCase().includes(searchLower)
+    );
+  }, [members, searchTerm]);
   
-  const filteredProjectManagers = projectManagers.filter(pm => 
-    pm.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    pm.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProjectManagers = React.useMemo(() => {
+    if (!searchTerm.trim()) {
+      return projectManagers;
+    }
+    const searchLower = searchTerm.toLowerCase().trim();
+    return projectManagers.filter(pm => 
+      pm.name?.toLowerCase().includes(searchLower) ||
+      pm.email?.toLowerCase().includes(searchLower)
+    );
+  }, [projectManagers, searchTerm]);
 
   if (loading) {
     return (
@@ -170,32 +182,39 @@ const LeaveManagementPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Leave Management</h2>
-        <div className="text-sm text-gray-500">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Leave Management</h2>
+        <div className="text-sm text-gray-500 dark:text-gray-400">
           Manage leave balances for team members
         </div>
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex-1">
           <input
             type="text"
             placeholder="Search by member name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
           />
         </div>
       </div>
 
       {/* Leave Balances Section */}
       <div className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-800">Leave Balances ({new Date().getFullYear()})</h3>
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">Leave Balances ({new Date().getFullYear()})</h3>
         
         {/* Member Leave Balances */}
         <div>
-          <h4 className="text-md font-medium text-gray-700 mb-4">Members</h4>
+          <h4 className="text-md font-medium text-gray-700 dark:text-gray-300 mb-4">
+            Members {filteredMembers.length > 0 && `(${filteredMembers.length})`}
+          </h4>
+          {filteredMembers.length === 0 && searchTerm.trim() && (
+            <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+              No members found matching "{searchTerm}"
+            </div>
+          )}
           <div className="grid gap-4">
             {filteredMembers.map(member => {
               const balance = memberLeaveBalances.find(b => b.member_id === member.id);
@@ -309,7 +328,14 @@ const LeaveManagementPage: React.FC = () => {
 
         {/* Project Manager Leave Balances */}
         <div>
-          <h4 className="text-md font-medium text-gray-700 mb-4">Project Managers</h4>
+          <h4 className="text-md font-medium text-gray-700 dark:text-gray-300 mb-4">
+            Project Managers {filteredProjectManagers.length > 0 && `(${filteredProjectManagers.length})`}
+          </h4>
+          {filteredProjectManagers.length === 0 && searchTerm.trim() && (
+            <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+              No project managers found matching "{searchTerm}"
+            </div>
+          )}
           <div className="grid gap-4">
             {filteredProjectManagers.map(pm => {
               const balance = pmLeaveBalances.find(b => b.project_manager_id === pm.id);
